@@ -278,6 +278,31 @@ task lint
 task check
 ```
 
+## CI/CD
+
+This project uses GitHub Actions for continuous integration and deployment:
+
+- **Quality Assurance**: Runs on every push and PR
+  - Linting (pre-commit hooks)
+  - Type checking (ty + mypy)
+  - Tests with coverage reporting
+  
+- **Release**: Triggered by version tags (e.g., `0.2.0`, `1.0.0a1`)
+  - Validates version is newer than PyPI
+  - Runs full test suite
+  - Builds distribution packages
+  - Publishes to PyPI automatically
+  - Creates GitHub release with notes
+
+To release a new version:
+
+```sh
+# Update version in pyproject.toml, commit, then:
+git tag 0.2.0
+git push origin 0.2.0
+# GitHub Actions will handle the rest
+```
+
 ## License
 
 MIT License (see LICENSE file)
@@ -285,3 +310,11 @@ MIT License (see LICENSE file)
 ## Contributing
 
 Issues and pull requests welcome at https://github.com/maartenq/inventory-guard
+
+Development setup:
+1. Fork the repository
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/inventory-guard.git`
+3. Install dependencies: `uv sync`
+4. Run tests: `uv run pytest`
+5. Run checks: `uv run mypy src/ && pre-commit run --all-files`
+6. Submit a pull request

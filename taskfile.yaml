@@ -66,3 +66,13 @@ tasks:
     cmds:
       - uv run -m ty check
       - uv run mypy src/
+
+  ci:install:
+    desc: Install with uv (locked) for CI
+    cmds:
+      - uv sync --locked
+
+  ci:test:
+    desc: Run pytest with coverage for CI
+    cmds:
+      - uv run -m pytest --verbose --cov --cov-report=xml --cov-report=term

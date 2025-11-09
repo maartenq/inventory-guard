@@ -40,9 +40,25 @@ dev = [
     "hypothesis>=6.147.0",
     "mypy>=1.18.2",
     "pytest",
+    "pytest-cov>=7.0.0",
     "ty>=0.0.1a22",
 ]
 
 [build-system]
 requires = ["uv-build"]
 build-backend = "uv_build"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", ".*", "*/site-packages/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
