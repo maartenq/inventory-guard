@@ -1,12 +1,35 @@
 [project]
 name = "inventory-guard"
 version = "0.1.0"
-description = "Ansible Inventory Guard"
+description = "Semantic change guard for Ansible inventories - detect unexpected infrastructure changes"
 readme = "README.md"
-requires-python = "==3.11.*"
-dependencies = [
-    "ruamel-yaml==0.18.*",
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Maarten", email = "ikmaarten@gmail.com"}
 ]
+keywords = ["ansible", "inventory", "guard", "ci-cd", "testing", "devops"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "ruamel-yaml>=0.18,<0.19",
+]
+
+[project.urls]
+Homepage = "https://github.com/maartenq/inventory_guard"
+Repository = "https://github.com/maartenq/inventory_guard"
+Issues = "https://github.com/maartenq/inventory_guard/issues"
 
 [project.scripts]
 inventory-guard = "inventory_guard.main:main"

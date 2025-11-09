@@ -158,12 +158,27 @@ Logs are structured JSON on stderr for easy parsing:
 
 ### CI/CD Pipeline
 
+**GitHub Actions:**
+```yaml
+# .github/workflows/inventory-check.yml
+name: Inventory Check
+on: [pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install inventory-guard
+      - run: inventory-guard -c inventory/prod.yml -n inventory/prod-new.yml
+```
+
+**GitLab CI:**
 ```yaml
 # .gitlab-ci.yml
 inventory-check:
   script:
-    - inventory-guard --current $CI_PROJECT_DIR/inventory/prod.yml
-      --new $CI_PROJECT_DIR/inventory/prod-new.yml
+    - pip install inventory-guard
+    - inventory-guard -c inventory/prod.yml -n inventory/prod-new.yml
   only:
     - merge_requests
 ```
@@ -242,7 +257,7 @@ Some keys change on every run (timestamps, build IDs). Ignore them:
 Clone and setup:
 
 ```sh
-git clone https://gitlab.com/maartenq/inventory_guard.git
+git clone https://github.com/maartenq/inventory_guard.git
 cd inventory_guard
 task install
 ```
@@ -269,4 +284,4 @@ MIT License (see LICENSE file)
 
 ## Contributing
 
-Issues and merge requests welcome at https://gitlab.com/maartenq/inventory_guard
+Issues and pull requests welcome at https://github.com/maartenq/inventory_guard
