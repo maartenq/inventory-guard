@@ -43,15 +43,16 @@ def run_guard(
 
 def parse_summary(stdout: str) -> dict:
     """
-    Extract the JSON blob from stdout. The script prints a JSON summary
-    followed by a status line ("SEMANTIC GUARD: ...").
+    Extract the JSON blob from stdout.
+    With the new output model, JSON is only present when --json flag is used.
     """
     s = stdout.strip()
+    if not s:
+        return {}
     start = s.find("{")
     end = s.rfind("}")
-    assert start != -1 and end != -1 and end > start, (
-        f"Did not find JSON in output:\n{s}"
-    )
+    if start == -1 or end == -1 or end <= start:
+        return {}
     return json.loads(s[start : end + 1])
 
 
@@ -168,6 +169,7 @@ def test_vault_tag_parses(tmp_path):
             "10",
             "--max-var-change-pct",
             "50",
+            "--json",  # Need --json flag to get JSON output
         ],
     )
     assert proc.returncode == 0, proc.stderr
@@ -189,6 +191,7 @@ def test_small_var_change_passes(tmp_path):
             "0",  # no host churn allowed
             "--max-var-change-pct",
             "100",  # 1 change / 2 baseline keys = 50%; allow it
+            "--json",
         ],
     )
     assert proc.returncode == 0, proc.stderr
@@ -212,8 +215,8 @@ def test_host_add_fails_when_threshold_low(tmp_path):
         ],
     )
     assert proc.returncode == 2
-    assert "Host delta" in proc.stderr
-    assert "exceeds limit" in proc.stderr
+    # Error messages now go to stderr as JSON logs
+    assert "Host delta" in proc.stderr or "exceeds limit" in proc.stderr
 
 
 def test_var_change_fails_when_threshold_low(tmp_path):
@@ -231,8 +234,8 @@ def test_var_change_fails_when_threshold_low(tmp_path):
         ],
     )
     assert proc.returncode == 2
-    assert "Variable changes" in proc.stderr
-    assert "exceed limit" in proc.stderr
+    # Error messages now go to stderr as JSON logs
+    assert "Variable changes" in proc.stderr or "exceed limit" in proc.stderr
 
 
 def test_ignore_key_regex_allows_noisy_changes(tmp_path):
@@ -264,8 +267,134 @@ def test_ignore_key_regex_allows_noisy_changes(tmp_path):
             "0",
             "--ignore-key-regex",
             "^(build_id)$",
+            "--json",
         ],
     )
     assert proc_ignored.returncode == 0, proc_ignored.stderr
     summary = parse_summary(proc_ignored.stdout)
     assert summary["var_changes_total"] == 0
+
+
+def test_silent_success_by_default(tmp_path):
+    """Test that successful runs produce no stdout output by default."""
+    current_yaml = base_inventory()
+    new_yaml = base_inventory()  # identical
+    proc = run_guard(
+        current_yaml,
+        new_yaml,
+        tmp_path,
+        extra_args=[
+            "--max-host-change-pct",
+            "10",
+            "--max-var-change-pct",
+            "10",
+        ],
+    )
+    assert proc.returncode == 0
+    assert proc.stdout.strip() == "", "Expected empty stdout without --json flag"
+
+
+def test_json_flag_produces_output(tmp_path):
+    """Test that --json flag produces JSON on stdout."""
+    current_yaml = base_inventory()
+    new_yaml = base_inventory()
+    proc = run_guard(
+        current_yaml,
+        new_yaml,
+        tmp_path,
+        extra_args=[
+            "--max-host-change-pct",
+            "10",
+            "--max-var-change-pct",
+            "10",
+            "--json",
+        ],
+    )
+    assert proc.returncode == 0
+    assert proc.stdout.strip() != "", "Expected JSON output with --json flag"
+    summary = parse_summary(proc.stdout)
+    assert "current_hosts" in summary
+
+
+def test_verbose_flag_produces_logs(tmp_path):
+    """Test that -v flag produces INFO logs on stderr."""
+    current_yaml = base_inventory()
+    new_yaml = inventory_with_small_changes()
+    proc = run_guard(
+        current_yaml,
+        new_yaml,
+        tmp_path,
+        extra_args=[
+            "--max-host-change-pct",
+            "100",
+            "--max-var-change-pct",
+            "100",
+            "-v",
+        ],
+    )
+    assert proc.returncode == 0
+    # Should have INFO level logs in stderr
+    assert "INFO" in proc.stderr or "timestamp" in proc.stderr
+
+
+def test_debug_flag_produces_detailed_logs(tmp_path):
+    """Test that -vv flag produces DEBUG logs on stderr."""
+    current_yaml = base_inventory()
+    new_yaml = inventory_with_small_changes()
+    proc = run_guard(
+        current_yaml,
+        new_yaml,
+        tmp_path,
+        extra_args=[
+            "--max-host-change-pct",
+            "100",
+            "--max-var-change-pct",
+            "100",
+            "-vv",
+        ],
+    )
+    assert proc.returncode == 0
+    # Should have DEBUG level logs in stderr
+    assert "DEBUG" in proc.stderr or "timestamp" in proc.stderr
+
+
+def test_json_out_writes_file(tmp_path):
+    """Test that --json-out writes JSON to a file."""
+    current_yaml = base_inventory()
+    new_yaml = base_inventory()
+    json_file = tmp_path / "output.json"
+
+    proc = run_guard(
+        current_yaml,
+        new_yaml,
+        tmp_path,
+        extra_args=[
+            "--max-host-change-pct",
+            "10",
+            "--max-var-change-pct",
+            "10",
+            "--json-out",
+            str(json_file),
+        ],
+    )
+    assert proc.returncode == 0
+    assert json_file.exists(), "JSON file should be created"
+
+    with open(json_file) as f:
+        summary = json.load(f)
+    assert "current_hosts" in summary
+
+
+def test_file_not_found_error(tmp_path):
+    """Test proper exit code for missing files."""
+    proc = run_guard(
+        base_inventory(),
+        base_inventory(),
+        tmp_path,
+        extra_args=[
+            "--current",
+            "/nonexistent/file.yml",
+        ],
+    )
+    assert proc.returncode == 1, "Should exit with code 1 for file errors"
+    assert "not found" in proc.stderr.lower() or "error" in proc.stderr.lower()

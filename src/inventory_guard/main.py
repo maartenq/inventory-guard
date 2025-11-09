@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import re
 import sys
 import tomllib
@@ -16,6 +17,8 @@ from typing import Any
 
 from ruamel.yaml import YAML  # type: ignore
 from ruamel.yaml.nodes import ScalarNode
+
+logger = logging.getLogger(__name__)
 
 yaml = YAML(typ="safe")
 
@@ -97,6 +100,41 @@ def load_config(path_opt: str | None) -> dict[str, Any]:
         with p.open("rb") as f:
             return tomllib.load(f)
     return {}
+
+
+# ---------- Logging ----------
+def setup_logging(verbosity: int) -> None:
+    """
+    Configure logging based on verbosity level.
+
+    Args:
+        verbosity: 0 = WARNING, 1 = INFO, 2+ = DEBUG
+    """
+    if verbosity >= 2:
+        level = logging.DEBUG
+    elif verbosity == 1:
+        level = logging.INFO
+    else:
+        level = logging.WARNING
+
+    # JSON-structured logging for easier parsing
+    class JSONFormatter(logging.Formatter):
+        def format(self, record: logging.LogRecord) -> str:
+            log_obj = {
+                "timestamp": self.formatTime(record, self.datefmt),
+                "level": record.levelname,
+                "message": record.getMessage(),
+            }
+            if record.exc_info:
+                log_obj["exception"] = self.formatException(record.exc_info)
+            return json.dumps(log_obj)
+
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(JSONFormatter(datefmt="%Y-%m-%dT%H:%M:%S"))
+
+    logging.root.setLevel(level)
+    logging.root.handlers.clear()
+    logging.root.addHandler(handler)
 
 
 # ---------- Core helpers ----------
@@ -293,6 +331,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Regex for volatile var keys to ignore (repeatable)",
     )
+    ap.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase verbosity (-v for INFO, -vv for DEBUG)",
+    )
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output JSON summary to stdout",
+    )
     ap.add_argument("--json-out", default=None, help="Write JSON summary to path")
     ap.add_argument("--report", default=None, help="Write Markdown report to path")
     ap.add_argument(
@@ -360,6 +411,10 @@ def merge_with_config(ns: argparse.Namespace) -> argparse.Namespace:
     json_out = ns.json_out if ns.json_out is not None else get_cfg("json_out", "")
     report = ns.report if ns.report is not None else get_cfg("report", "")
 
+    # Verbosity and json flags are CLI-only (not configurable via TOML)
+    verbose = getattr(ns, "verbose", 0)
+    output_json = getattr(ns, "json", False)
+
     # Validate required paths
     if not current:
         raise SystemExit("--current is required (CLI or TOML)")
@@ -377,8 +432,54 @@ def merge_with_config(ns: argparse.Namespace) -> argparse.Namespace:
         set_like_key_regex=list(set_like_key_regex or []),
         json_out=str(json_out or ""),
         report=str(report or ""),
+        verbose=int(verbose),
+        json=bool(output_json),
     )
     return merged
+
+
+# ---------- Output helpers ----------
+def _json_default(o: Any) -> Any:
+    """JSON serializer for dataclasses and sets."""
+    if is_dataclass(o) and not isinstance(o, type):
+        return asdict(o)
+    if isinstance(o, set):
+        return sorted(o)
+    raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
+
+
+def output_json_stdout(summary: Summary) -> None:
+    """Write JSON summary to stdout."""
+    print(
+        json.dumps(
+            summary,
+            default=_json_default,
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+
+def write_json_file(summary: Summary, path: str) -> None:
+    """Write JSON summary to file."""
+    logger.info("Writing JSON summary to %s", path)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(
+            summary,
+            f,
+            default=_json_default,
+            indent=2,
+            ensure_ascii=False,
+        )
+
+
+def write_markdown_report(summary: Summary, path: str) -> None:
+    """Write Markdown report to file."""
+    logger.info("Writing Markdown report to %s", path)
+    summary_dict = json.loads(json.dumps(summary, default=_json_default))
+    md = _render_markdown(summary_dict)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(md)
 
 
 # ---------- Main ----------
@@ -386,21 +487,58 @@ def main() -> None:
     args_cli = parse_args()
     args = merge_with_config(args_cli)
 
-    ignored_regexes: list[re.Pattern[str]] = [
-        re.compile(p) for p in args.ignore_key_regex
-    ]
-    setlike_key_patterns: list[re.Pattern[str]] = [
-        re.compile(p) for p in args.set_like_key_regex
-    ]
+    # Setup logging based on verbosity
+    setup_logging(args.verbose)
 
-    current = load_yaml(args.current)
-    new = load_yaml(args.new)
+    logger.info("Starting inventory comparison")
+    logger.debug("Config: current=%s, new=%s", args.current, args.new)
 
+    try:
+        ignored_regexes: list[re.Pattern[str]] = [
+            re.compile(p) for p in args.ignore_key_regex
+        ]
+    except re.error as e:
+        logger.error("Invalid ignore_key_regex pattern: %s", e)
+        sys.exit(1)
+
+    try:
+        setlike_key_patterns: list[re.Pattern[str]] = [
+            re.compile(p) for p in args.set_like_key_regex
+        ]
+    except re.error as e:
+        logger.error("Invalid set_like_key_regex pattern: %s", e)
+        sys.exit(1)
+
+    logger.info("Loading current inventory: %s", args.current)
+    try:
+        current = load_yaml(args.current)
+    except FileNotFoundError:
+        logger.error("Current inventory file not found: %s", args.current)
+        sys.exit(1)
+    except Exception as e:
+        logger.error("Failed to load current inventory: %s", e)
+        sys.exit(1)
+
+    logger.info("Loading new inventory: %s", args.new)
+    try:
+        new = load_yaml(args.new)
+    except FileNotFoundError:
+        logger.error("New inventory file not found: %s", args.new)
+        sys.exit(1)
+    except Exception as e:
+        logger.error("Failed to load new inventory: %s", e)
+        sys.exit(1)
+
+    logger.info("Computing effective host variables")
     current_hosts = collect_effective_hostvars(current)
     new_hosts = collect_effective_hostvars(new)
 
     current_host_set: set[str] = set(current_hosts)
     new_host_set: set[str] = set(new_hosts)
+
+    logger.debug(
+        "Current hosts: %d, New hosts: %d", len(current_host_set), len(new_host_set)
+    )
 
     added_hosts: list[str] = sorted(new_host_set - current_host_set)
     removed_hosts: list[str] = sorted(current_host_set - new_host_set)
@@ -409,7 +547,16 @@ def main() -> None:
     current_host_count: int = max(1, len(current_host_set))
     host_delta_pct: float = (host_delta / current_host_count) * 100.0
 
+    if added_hosts:
+        logger.info("Hosts added: %d", len(added_hosts))
+        logger.debug("Added hosts: %s", added_hosts[:5])
+    if removed_hosts:
+        logger.info("Hosts removed: %d", len(removed_hosts))
+        logger.debug("Removed hosts: %s", removed_hosts[:5])
+
     common_hosts: list[str] = sorted(current_host_set & new_host_set)
+    logger.info("Comparing variables for %d common hosts", len(common_hosts))
+
     var_changes: int = 0
     var_baseline_keys: int = 0
     per_host_changes: dict[str, dict[str, list[str]]] = {}
@@ -431,12 +578,21 @@ def main() -> None:
             nv = normalize_for_compare(k, nvars.get(k), setlike_key_patterns)
             if canon(cv) != canon(nv):
                 changed_values.append(k)
+                logger.debug("Host %s: variable '%s' changed", h, k)
 
         changes_for_h: int = len(added_keys) + len(removed_keys) + len(changed_values)
         var_changes += changes_for_h
         var_baseline_keys += len(ckeys)
 
         if changes_for_h:
+            logger.debug(
+                "Host %s: %d changes (%d added, %d removed, %d modified)",
+                h,
+                changes_for_h,
+                len(added_keys),
+                len(removed_keys),
+                len(changed_values),
+            )
             per_host_changes[h] = {
                 "added_keys": added_keys,
                 "removed_keys": removed_keys,
@@ -445,6 +601,14 @@ def main() -> None:
 
     var_baseline_keys = max(1, var_baseline_keys)
     var_change_pct: float = (var_changes / var_baseline_keys) * 100.0
+
+    logger.info(
+        "Summary: %d host changes (%.2f%%), %d variable changes (%.2f%%)",
+        host_delta,
+        host_delta_pct,
+        var_changes,
+        var_change_pct,
+    )
 
     limits = Limits(
         max_host_change_pct=args.max_host_change_pct,
@@ -470,67 +634,52 @@ def main() -> None:
         },
     )
 
-    # Human-readable + machine-readable
-    def _json_default(o: Any):
-        if is_dataclass(o) and not isinstance(o, type):
-            return asdict(o)
-        if isinstance(o, set):
-            return sorted(o)
-        raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
+    # Output JSON to stdout if requested
+    if args.json:
+        output_json_stdout(summary)
 
-    print(
-        json.dumps(
-            summary,
-            default=_json_default,
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-
-    # Optional report + JSON file
-    if args.report:
-        summary_dict = json.loads(json.dumps(summary, default=_json_default))
-        md = _render_markdown(summary_dict)
-        with open(args.report, "w", encoding="utf-8") as f:
-            f.write(md)
+    # Write optional output files
     if args.json_out:
-        with open(args.json_out, "w", encoding="utf-8") as f:
-            json.dump(
-                summary,
-                f,
-                default=_json_default,
-                indent=2,
-                ensure_ascii=False,
-            )
+        try:
+            write_json_file(summary, args.json_out)
+        except Exception as e:
+            logger.error("Failed to write JSON file: %s", e)
+            sys.exit(1)
 
+    if args.report:
+        try:
+            write_markdown_report(summary, args.report)
+        except Exception as e:
+            logger.error("Failed to write Markdown report: %s", e)
+            sys.exit(1)
+
+    # Check thresholds
     def fail(msg: str) -> None:
-        print(f"\nSEMANTIC GUARD: {msg}", file=sys.stderr)
+        logger.error("Guard check failed: %s", msg)
         sys.exit(2)
 
     if host_delta_pct > args.max_host_change_pct:
         fail(
             f"Host delta {host_delta} ({host_delta_pct:.2f}%) "
-            f"exceeds limit {args.max_host_change_pct}%."
+            f"exceeds limit {args.max_host_change_pct}%"
         )
 
     if args.max_host_change_abs and host_delta > args.max_host_change_abs:
-        fail(
-            f"Host delta {host_delta} exceeds absolute cap {args.max_host_change_abs}."
-        )
+        fail(f"Host delta {host_delta} exceeds absolute cap {args.max_host_change_abs}")
 
     if var_change_pct > args.max_var_change_pct:
         fail(
             f"Variable changes {var_changes} ({var_change_pct:.2f}%) "
-            f"exceed limit {args.max_var_change_pct}%."
+            f"exceed limit {args.max_var_change_pct}%"
         )
 
     if args.max_var_change_abs and var_changes > args.max_var_change_abs:
         fail(
             f"Variable changes {var_changes} exceed absolute "
-            f"cap {args.max_var_change_abs}."
+            f"cap {args.max_var_change_abs}"
         )
 
-    print("\nSEMANTIC GUARD: change volume OK.")
+    logger.info("All checks passed")
     sys.exit(0)
 
 

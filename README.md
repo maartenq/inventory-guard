@@ -27,15 +27,22 @@ pip install inventory-guard
 ## Quick Start
 
 ```sh
-# Compare two inventory files
+# Compare two inventory files (silent on success)
 inventory-guard \
   --current inventory/prod.yml \
   --new inventory/prod-updated.yml \
   --max-host-change-pct 5.0 \
   --max-var-change-pct 2.0
+
+# Get verbose output to see what's happening
+inventory-guard -v --current inventory/prod.yml --new inventory/prod-updated.yml
+
+# Get JSON summary for further processing
+inventory-guard --json --current inventory/prod.yml --new inventory/prod-updated.yml | jq
 ```
 
-If changes exceed thresholds, the tool exits with code 2. Otherwise, it exits 0.
+By default, successful runs produce no output (Unix philosophy: no news is good
+news). Use `-v` for INFO logs or `--json` for machine-readable output.
 
 ## Configuration File
 
@@ -90,6 +97,8 @@ inventory-guard
                            (default: 0 = disabled)
 --ignore-key-regex REGEX   Variable keys to ignore (repeatable)
 --set-like-key-regex REGEX Treat list values as unordered sets (repeatable)
+-v, --verbose              Increase verbosity (-v for INFO, -vv for DEBUG)
+--json                     Output JSON summary to stdout
 --json-out PATH            Write JSON summary to file
 --report PATH              Write Markdown report to file
 ```
@@ -107,9 +116,28 @@ inventory-guard
 
 ## Exit Codes
 
-- `0`: Changes are within acceptable thresholds
-- `2`: Changes exceed thresholds (semantic guard failure)
-- Other: Errors (file not found, invalid YAML, etc.)
+- `0`: Success - changes are within acceptable thresholds
+- `1`: Error - file not found, invalid YAML, bad configuration, etc.
+- `2`: Guard failure - changes exceed configured thresholds
+
+## Output Behavior
+
+Inventory Guard follows Unix conventions for output:
+
+- **Success (exit 0)**: Silent by default. Use `-v` for INFO logs, `-vv` for
+  DEBUG logs
+- **Errors (exit 1, 2)**: Error messages logged to stderr as JSON
+- **JSON output**: Only to stdout when `--json` flag is used
+- **Reports**: Written to files when `--json-out` or `--report` specified
+
+### Logging Format
+
+Logs are structured JSON on stderr for easy parsing:
+
+```json
+{"timestamp": "2025-11-09T21:46:08", "level": "INFO", "message": "Starting inventory comparison"}
+{"timestamp": "2025-11-09T21:46:08", "level": "ERROR", "message": "File not found: inventory.yml"}
+```
 
 ## Use Cases
 
