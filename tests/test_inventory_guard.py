@@ -1,12 +1,7 @@
 import json
 import subprocess
-import sys
 from pathlib import Path
 from textwrap import dedent
-
-HERE = Path(__file__).parent
-REPO_ROOT = HERE.parent
-SCRIPT = REPO_ROOT / "src" / "inventory_guard" / "main.py"
 
 
 def run_guard(
@@ -15,15 +10,17 @@ def run_guard(
     tmp_path: Path,
     extra_args=None,
 ):
-    """Write two inventories and run the guard as a subprocess."""
+    """Write two inventories and run the guard as a subprocess.
+
+    Uses the installed 'inventory-guard' command to test the real entry point.
+    """
     current_p = tmp_path / "current.yaml"
     new_p = tmp_path / "new.yaml"
     current_p.write_text(current_yaml, encoding="utf-8")
     new_p.write_text(new_yaml, encoding="utf-8")
 
     args = [
-        sys.executable,
-        str(SCRIPT),
+        "inventory-guard",
         "--current",
         str(current_p),
         "--new",
@@ -36,7 +33,6 @@ def run_guard(
         args,
         text=True,
         capture_output=True,
-        cwd=str(REPO_ROOT),
     )
     return proc
 
@@ -147,11 +143,11 @@ def inventory_with_noisy_key_change() -> str:
 
 
 def test_help_succeeds():
+    """Test that the installed inventory-guard command shows help."""
     proc = subprocess.run(
-        [sys.executable, str(SCRIPT), "--help"],
+        ["inventory-guard", "--help"],
         text=True,
         capture_output=True,
-        cwd=str(REPO_ROOT),
     )
     assert proc.returncode == 0
     assert "Semantic guard for Ansible inventory changes." in proc.stdout
