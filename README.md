@@ -172,11 +172,7 @@ all:
     app-1:
       db_password: !vault |
         $ANSIBLE_VAULT;1.2;AES256;dev
-        3061323363346134383765383366633364306163656130333837366131383833356565
-        3263363434623733343538653462613064333634333464660a66363362393939343931
-        6163623763653733393830633138333935326536323964393966663938653062633063
-        6664656334373166630a36373639326266646566343261393261303630396334326362
-        6330
+        66643866353263333266393931336439623433646634303233663831316665663234...
 ```
 
 ### Set-like Keys
@@ -200,41 +196,25 @@ Some keys change on every run (timestamps, build IDs). Ignore them:
 
 ## Development
 
-- Clone the repo
-
-  ```sh
-  git clone https://gitlab.com/maartenq/inventory_guard.git
-  ```
-
-- Cd into inventory_guard
-
 ```sh
+# Clone the repo
+git clone https://gitlab.com/maartenq/inventory_guard.git
 cd inventory_guard
-```
 
-- Install dependencies
+# Install dependencies
+task install
 
-  ```sh
-  task install
-  ```
+# Run tests
+task test
 
-- Run tests
+# Run type checking
+task type
 
-  ```sh
-  task test
-  ```
+# Run linting
+task lint
 
-- Run type checking
-
-  ```sh
-  task type
-  ```
-
-- Run linting
-  ```sh
-  task lint
-  ```
-
+# Run all checks (lint + type)
+task check
 ```
 
 ## License
@@ -244,4 +224,3 @@ MIT License (see LICENSE file)
 ## Contributing
 
 Issues and merge requests welcome at https://gitlab.com/maartenq/inventory_guard
-```

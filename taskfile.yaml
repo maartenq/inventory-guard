@@ -26,7 +26,7 @@ tasks:
       - find {{ .TASK_DIR }} -type d -name "__pycache__" -exec rm -r {} +
 
   check:
-    desc: Clean and install
+    desc: Run all checks (lint + type)
     cmds:
       - task: lint
       - task: type
@@ -62,7 +62,7 @@ tasks:
       - uv run -m pytest {{ .CLI_ARGS }}
 
   type:
-    desc: Run pre-commit on all files
+    desc: Run type checking (ty + mypy)
     cmds:
       - uv run -m ty check
       - uv run mypy src/
