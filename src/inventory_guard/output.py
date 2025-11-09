@@ -91,9 +91,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
     lines.append("# Inventory Semantic Summary\n")
     lines.append(f"- **Current hosts**: {summary['current_hosts']}")
     lines.append(f"- **New hosts**: {summary['new_hosts']}")
-    lines.append(
-        f"- **Host delta**: {summary['host_delta']} ({summary['host_delta_pct']}%)\n"
-    )
+    lines.append(f"- **Host delta**: {summary['host_delta']} ({summary['host_delta_pct']}%)\n")
 
     if summary["host_added"]:
         lines.append("## Hosts Added")
@@ -109,8 +107,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
 
     lines.append("## Variable Changes (across common hosts)")
     lines.append(
-        f"- **Total var changes**: "
-        f"{summary['var_changes_total']} ({summary['var_change_pct']}%)"
+        f"- **Total var changes**: {summary['var_changes_total']} ({summary['var_change_pct']}%)"
     )
     lines.append(f"- **Baseline var keys**: {summary['var_baseline_keys']}\n")
 
@@ -119,18 +116,12 @@ def _render_markdown(summary: dict[str, Any]) -> str:
         for host, changes in summary["sample_per_host_changes"].items():
             lines.append(f"- **{host}**")
             if changes["added_keys"]:
-                lines.append(
-                    f"  - added: {', '.join(f'`{k}`' for k in changes['added_keys'])}"
-                )
+                lines.append(f"  - added: {', '.join(f'`{k}`' for k in changes['added_keys'])}")
             if changes["removed_keys"]:
-                lines.append(
-                    "  - removed: "
-                    f"{', '.join(f'`{k}`' for k in changes['removed_keys'])}"
-                )
+                lines.append(f"  - removed: {', '.join(f'`{k}`' for k in changes['removed_keys'])}")
             if changes["changed_values"]:
                 lines.append(
-                    "  - value changes: "
-                    f"{', '.join(f'`{k}`' for k in changes['changed_values'])}"
+                    f"  - value changes: {', '.join(f'`{k}`' for k in changes['changed_values'])}"
                 )
         lines.append("")
 
@@ -142,8 +133,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
     lines.append(f"- max_var_change_abs: {lim['max_var_change_abs']}")
     if lim["ignored_key_regex"]:
         lines.append(
-            "- ignored_key_regex: "
-            f"{', '.join(f'`{p}`' for p in lim['ignored_key_regex'])}"
+            f"- ignored_key_regex: {', '.join(f'`{p}`' for p in lim['ignored_key_regex'])}"
         )
     lines.append("")
     return "\n".join(lines)

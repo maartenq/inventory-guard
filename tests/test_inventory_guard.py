@@ -194,9 +194,7 @@ def test_help_succeeds():
     assert "Semantic guard for Ansible inventory changes." in proc.stdout
 
 
-def test_vault_tag_parses(
-    tmp_path, base_inventory_with_vault, inventory_small_change_with_vault
-):
+def test_vault_tag_parses(tmp_path, base_inventory_with_vault, inventory_small_change_with_vault):
     """Test that Ansible vault tags are parsed correctly."""
     proc = run_guard(
         base_inventory_with_vault,
@@ -271,9 +269,7 @@ def test_var_change_fails_when_threshold_low(
     assert "Variable changes" in proc.stderr or "exceed limit" in proc.stderr
 
 
-def test_ignore_key_regex_allows_noisy_changes(
-    tmp_path, base_inventory, inventory_noisy_key
-):
+def test_ignore_key_regex_allows_noisy_changes(tmp_path, base_inventory, inventory_noisy_key):
     """Test that ignore-key-regex filters out volatile keys."""
     strict_args = ["--max-host-change-pct", "100", "--max-var-change-pct", "0"]
 

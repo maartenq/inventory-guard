@@ -191,22 +191,17 @@ def test_variable_inheritance(inventory):
         # Extract expected inherited vars
         all_vars = inventory.get("all", {}).get("vars", {})
         child_vars = (
-            inventory.get("all", {})
-            .get("children", {})
-            .get("webservers", {})
-            .get("vars", {})
+            inventory.get("all", {}).get("children", {}).get("webservers", {}).get("vars", {})
         )
 
         # Property: Every host should have inherited vars
         for host_name, host_vars_actual in hosts.items():
             # All group vars should be present (unless overridden)
             for key, _value in all_vars.items():
-                if key not in child_vars and key not in inventory["all"]["children"][
-                    "webservers"
-                ]["hosts"].get(host_name, {}):
-                    assert key in host_vars_actual, (
-                        f"Host {host_name} missing inherited var {key}"
-                    )
+                if key not in child_vars and key not in inventory["all"]["children"]["webservers"][
+                    "hosts"
+                ].get(host_name, {}):
+                    assert key in host_vars_actual, f"Host {host_name} missing inherited var {key}"
 
 
 @given(inventory=simple_inventory(min_hosts=0, max_hosts=50))
@@ -311,18 +306,12 @@ def test_nested_group_vars_merge(inventory):
 
         all_vars = inventory.get("all", {}).get("vars", {})
         child_vars = (
-            inventory.get("all", {})
-            .get("children", {})
-            .get("webservers", {})
-            .get("vars", {})
+            inventory.get("all", {}).get("children", {}).get("webservers", {}).get("vars", {})
         )
 
         # Property: Child vars should override parent vars (unless host overrides)
         webservers_hosts = (
-            inventory.get("all", {})
-            .get("children", {})
-            .get("webservers", {})
-            .get("hosts", {})
+            inventory.get("all", {}).get("children", {}).get("webservers", {}).get("hosts", {})
         )
 
         for host_name, host_vars_actual in hosts.items():

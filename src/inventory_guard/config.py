@@ -186,9 +186,7 @@ def merge_with_config(ns: argparse.Namespace) -> argparse.Namespace:
     )
 
     ignore_key_regex = (
-        ns.ignore_key_regex
-        if ns.ignore_key_regex is not None
-        else get_cfg("ignore_key_regex", [])
+        ns.ignore_key_regex if ns.ignore_key_regex is not None else get_cfg("ignore_key_regex", [])
     )
     set_like_key_regex = (
         ns.set_like_key_regex
