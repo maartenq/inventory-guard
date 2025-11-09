@@ -16,13 +16,13 @@ accepting inventory updates, you can:
 
 ## Installation
 
-- With uv (recommended)
+- With `uv` (recommended)
 
-```sh
-uv add inventory-guard
-```
+  ```sh
+  uv add inventory-guard
+  ```
 
-- With pip
+- With `pip`
   ```
   pip install inventory-guard
   ```
@@ -235,10 +235,10 @@ Some keys change on every run (timestamps, build IDs). Ignore them:
 
 - Clone the repo
 
-```sh
-git clone https://gitlab.com/maartenq/inventory_guard.git
-cd inventory_guard
-```
+  ```sh
+  git clone https://gitlab.com/maartenq/inventory_guard.git
+  cd inventory_guard
+  ```
 
 - Install dependencies
 
@@ -265,6 +265,7 @@ cd inventory_guard
   ```
 
 - Run all checks (lint + type)
+
   ```sh
   task check
   ```
