@@ -1,0 +1,4 @@
+# file: /home/maarten/Repos/gitlab/maartenq/inventory_guard/.venv/bin/pytest
+# hypothesis_version: 6.147.0
+
+['-script.pyw', '.exe', '__main__']

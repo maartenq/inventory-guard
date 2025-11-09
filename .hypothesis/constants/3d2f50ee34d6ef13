@@ -1,0 +1,4 @@
+# file: /home/maarten/Repos/gitlab/maartenq/inventory_guard/src/inventory_guard/compare.py
+# hypothesis_version: 6.147.0
+
+[100.0, '!vault', ',', ':', 'Added hosts: %s', 'Hosts added: %d', 'Hosts removed: %d', 'Removed hosts: %s', 'added_keys', 'all', 'changed_values', 'children', 'hosts', 'removed_keys', 'safe', 'utf-8', 'vars']
