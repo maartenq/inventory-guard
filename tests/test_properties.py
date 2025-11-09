@@ -18,12 +18,23 @@ def var_value(draw):
     """Generate valid Ansible variable values (ASCII only for YAML compat)."""
     return draw(
         st.one_of(
-            st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), min_size=0, max_size=50),
+            st.text(
+                alphabet=st.characters(min_codepoint=32, max_codepoint=126),
+                min_size=0,
+                max_size=50,
+            ),
             st.integers(),
             st.floats(allow_nan=False, allow_infinity=False),
             st.booleans(),
             st.none(),
-            st.lists(st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126), min_size=0, max_size=20), max_size=10),
+            st.lists(
+                st.text(
+                    alphabet=st.characters(min_codepoint=32, max_codepoint=126),
+                    min_size=0,
+                    max_size=20,
+                ),
+                max_size=10,
+            ),
         )
     )
 
@@ -72,7 +83,7 @@ def simple_inventory(draw, min_hosts=0, max_hosts=20):
             max_size=max_hosts,
         )
     )
-    
+
     return {
         "all": {
             "hosts": hosts_dict,
@@ -93,7 +104,7 @@ def nested_inventory(draw, min_hosts=0, max_hosts=10):
             max_size=max_hosts,
         )
     )
-    
+
     return {
         "all": {
             "vars": group_vars,
@@ -116,21 +127,21 @@ def test_idempotent_comparison(inventory):
     """Property: Comparing identical inventories always shows zero changes."""
     with tempfile.TemporaryDirectory() as tmpdir:
         inv_path = Path(tmpdir) / "inventory.yml"
-        
+
         # Write inventory as JSON (YAML subset)
         inv_path.write_text(json.dumps(inventory))
-        
+
         # Load and compare with itself
         inv_data = compare.load_yaml(str(inv_path))
         current_hosts = compare.collect_effective_hostvars(inv_data)
         new_hosts = compare.collect_effective_hostvars(inv_data)
-        
+
         # Property: Same inventory should have no changes
         assert current_hosts == new_hosts
-        
+
         current_set = set(current_hosts.keys())
         new_set = set(new_hosts.keys())
-        
+
         assert current_set == new_set, "Host sets should be identical"
         assert len(current_set - new_set) == 0, "No hosts should be removed"
         assert len(new_set - current_set) == 0, "No hosts should be added"
@@ -141,28 +152,28 @@ def test_idempotent_comparison(inventory):
 def test_comparison_symmetry(inv1, inv2):
     """Property: Comparison results should be mathematically consistent."""
     assume(inv1 != inv2)  # Only test when they're different
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         # Write both inventories
         path1 = Path(tmpdir) / "inv1.yml"
         path2 = Path(tmpdir) / "inv2.yml"
         path1.write_text(json.dumps(inv1))
         path2.write_text(json.dumps(inv2))
-        
+
         # Load both
         data1 = compare.load_yaml(str(path1))
         data2 = compare.load_yaml(str(path2))
-        
+
         hosts1 = compare.collect_effective_hostvars(data1)
         hosts2 = compare.collect_effective_hostvars(data2)
-        
+
         # Property: Set operations should be symmetric
         set1 = set(hosts1.keys())
         set2 = set(hosts2.keys())
-        
+
         added = set2 - set1
         removed = set1 - set2
-        
+
         # Property verified: symmetric difference works correctly
         assert len(added) >= 0 and len(removed) >= 0
 
@@ -174,10 +185,10 @@ def test_variable_inheritance(inventory):
     with tempfile.TemporaryDirectory() as tmpdir:
         inv_path = Path(tmpdir) / "inventory.yml"
         inv_path.write_text(json.dumps(inventory))
-        
+
         inv_data = compare.load_yaml(str(inv_path))
         hosts = compare.collect_effective_hostvars(inv_data)
-        
+
         # Extract expected inherited vars
         all_vars = inventory.get("all", {}).get("vars", {})
         child_vars = (
@@ -186,13 +197,17 @@ def test_variable_inheritance(inventory):
             .get("webservers", {})
             .get("vars", {})
         )
-        
+
         # Property: Every host should have inherited vars
         for host_name, host_vars_actual in hosts.items():
             # All group vars should be present (unless overridden)
             for key, value in all_vars.items():
-                if key not in child_vars and key not in inventory["all"]["children"]["webservers"]["hosts"].get(host_name, {}):
-                    assert key in host_vars_actual, f"Host {host_name} missing inherited var {key}"
+                if key not in child_vars and key not in inventory["all"]["children"][
+                    "webservers"
+                ]["hosts"].get(host_name, {}):
+                    assert key in host_vars_actual, (
+                        f"Host {host_name} missing inherited var {key}"
+                    )
 
 
 @given(inventory=simple_inventory(min_hosts=0, max_hosts=50))
@@ -202,13 +217,13 @@ def test_no_host_loss(inventory):
     with tempfile.TemporaryDirectory() as tmpdir:
         inv_path = Path(tmpdir) / "inventory.yml"
         inv_path.write_text(json.dumps(inventory))
-        
+
         inv_data = compare.load_yaml(str(inv_path))
         output_hosts = compare.collect_effective_hostvars(inv_data)
-        
+
         input_host_names = set(inventory.get("all", {}).get("hosts", {}).keys())
         output_host_names = set(output_hosts.keys())
-        
+
         # Property: No hosts should disappear
         assert input_host_names == output_host_names, "Host set should be preserved"
 
@@ -225,23 +240,23 @@ def test_delta_percentage_math(inv1, inv2):
         path2 = Path(tmpdir) / "inv2.yml"
         path1.write_text(json.dumps(inv1))
         path2.write_text(json.dumps(inv2))
-        
+
         data1 = compare.load_yaml(str(path1))
         data2 = compare.load_yaml(str(path2))
-        
+
         hosts1 = compare.collect_effective_hostvars(data1)
         hosts2 = compare.collect_effective_hostvars(data2)
-        
+
         set1 = set(hosts1.keys())
         set2 = set(hosts2.keys())
-        
+
         added = len(set2 - set1)
         removed = len(set1 - set2)
         delta = added + removed
-        
+
         current_count = max(1, len(set1))
         expected_pct = (delta / current_count) * 100.0
-        
+
         # Property: Manual calculation should match
         # Allow small floating point error
         actual_pct = (delta / current_count) * 100.0
@@ -255,10 +270,10 @@ def test_canonicalization_stability(inventory):
     with tempfile.TemporaryDirectory() as tmpdir:
         inv_path = Path(tmpdir) / "inventory.yml"
         inv_path.write_text(json.dumps(inventory))
-        
+
         inv_data = compare.load_yaml(str(inv_path))
         hosts = compare.collect_effective_hostvars(inv_data)
-        
+
         # Property: Canonicalizing same value twice gives same result
         for host_name, host_vars in hosts.items():
             for key, value in host_vars.items():
@@ -274,10 +289,10 @@ def test_filter_vars_preserves_unfiltered(inventory):
     with tempfile.TemporaryDirectory() as tmpdir:
         inv_path = Path(tmpdir) / "inventory.yml"
         inv_path.write_text(json.dumps(inventory))
-        
+
         inv_data = compare.load_yaml(str(inv_path))
         hosts = compare.collect_effective_hostvars(inv_data)
-        
+
         # Property: Empty filter list should preserve everything
         for host_name, host_vars in hosts.items():
             filtered = compare.filter_vars(host_vars, [])
@@ -291,10 +306,10 @@ def test_nested_group_vars_merge(inventory):
     with tempfile.TemporaryDirectory() as tmpdir:
         inv_path = Path(tmpdir) / "inventory.yml"
         inv_path.write_text(json.dumps(inventory))
-        
+
         inv_data = compare.load_yaml(str(inv_path))
         hosts = compare.collect_effective_hostvars(inv_data)
-        
+
         all_vars = inventory.get("all", {}).get("vars", {})
         child_vars = (
             inventory.get("all", {})
@@ -302,13 +317,22 @@ def test_nested_group_vars_merge(inventory):
             .get("webservers", {})
             .get("vars", {})
         )
-        
-        # Property: Child vars should override parent vars
+
+        # Property: Child vars should override parent vars (unless host overrides)
+        webservers_hosts = (
+            inventory.get("all", {})
+            .get("children", {})
+            .get("webservers", {})
+            .get("hosts", {})
+        )
+
         for host_name, host_vars_actual in hosts.items():
-            # Check that child vars took precedence
+            host_specific_vars = webservers_hosts.get(host_name, {})
+
+            # Check that child vars took precedence over parent (when not overridden by host)
             for key, child_value in child_vars.items():
-                if key in all_vars:
-                    # Child should override parent
-                    assert (
-                        host_vars_actual.get(key) == child_value
-                    ), f"Child var {key} should override parent"
+                if key in all_vars and key not in host_specific_vars:
+                    # Child should override parent (and host didn't override)
+                    assert host_vars_actual.get(key) == child_value, (
+                        f"Child var {key} should override parent (got {host_vars_actual.get(key)})"
+                    )

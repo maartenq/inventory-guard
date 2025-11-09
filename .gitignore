@@ -14,3 +14,6 @@ wheels/
 
 # Coverage
 .coverage
+
+# Hypothesis
+.hypothesis/examples/
