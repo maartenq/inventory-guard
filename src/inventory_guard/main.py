@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# inventory_semantic_guard.py
+# main.py
 
 from __future__ import annotations
 
