@@ -1,19 +1,47 @@
-# Python-generated files
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[oc]
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
 build/
 dist/
 wheels/
-*.egg-info
-
-# .env are local and should no be shipped
-.env
+*.egg-info/
+*.egg
+.eggs/
 
 # Virtual environments
-.venv
+.venv/
+venv/
+ENV/
+env/
 
-# Coverage
+# Testing
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+htmlcov/
 .coverage
+.coverage.*
+coverage.xml
+*.cover
 
 # Hypothesis
 .hypothesis/examples/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files (but .envrc is tracked for direnv setup)
+.env
+.env.*
+
+# Task runner
+.task/
