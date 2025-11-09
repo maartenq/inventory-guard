@@ -1,685 +1,113 @@
 #!/usr/bin/env python3
-# main.py
+"""Main entry point for Inventory Guard - Ansible inventory semantic guard."""
 
 from __future__ import annotations
 
-import argparse
-import json
 import logging
-import re
 import sys
-import tomllib
-from collections.abc import Mapping
-from copy import deepcopy
-from dataclasses import asdict, dataclass, is_dataclass
-from pathlib import Path
-from typing import Any
 
-from ruamel.yaml import YAML  # type: ignore
-from ruamel.yaml.nodes import ScalarNode
+try:
+    from . import compare, config, output
+except ImportError:
+    # Handle direct execution
+    import compare  # type: ignore
+    import config  # type: ignore
+    import output  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-yaml = YAML(typ="safe")
 
-
-# ---------- Defaults ----------
-DEFAULT_MAX_HOST_CHANGE_PCT = 5.0
-DEFAULT_MAX_VAR_CHANGE_PCT = 2.0
-DEFAULT_MAX_HOST_CHANGE_ABS = 0
-DEFAULT_MAX_VAR_CHANGE_ABS = 0
-DEFAULT_SETLIKE_KEYS = [r"^foreman_host_collections$"]
-DEFAULT_CONFIG_FILE = "inventory_semantic_guard.toml"
-
-
-# --- Allow Ansible !vault tags as plain strings ---
-def _vault_constructor(loader, node):
-    if isinstance(node, ScalarNode):
-        return loader.construct_scalar(node)
-    return loader.construct_object(node)
-
-
-yaml.constructor.add_constructor("!vault", _vault_constructor)
-
-# ---------- Types ----------
-VarsMap = dict[str, Any]
-HostVars = dict[str, VarsMap]
-YAMLNode = Mapping[str, Any]
-
-
-@dataclass(slots=True)
-class Limits:
-    max_host_change_pct: float
-    max_var_change_pct: float
-    max_host_change_abs: int
-    max_var_change_abs: int
-    ignored_key_regex: list[str]
-
-
-@dataclass(slots=True)
-class Summary:
-    current_hosts: int
-    new_hosts: int
-    host_added: list[str]
-    host_removed: list[str]
-    host_delta: int
-    host_delta_pct: float
-
-    var_changes_total: int
-    var_change_pct: float
-    var_baseline_keys: int
-
-    limits: Limits
-    sample_per_host_changes: dict[str, dict[str, list[str]]]
-
-
-# ---------- IO ----------
-def load_yaml(path: str) -> dict[str, Any]:
-    with open(path, encoding="utf-8") as f:
-        data = yaml.load(f) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"{path} is not a YAML mapping at root")
-    return dict(data)
-
-
-def load_config(path_opt: str | None) -> dict[str, Any]:
+def validate_thresholds(summary: compare.Summary, args) -> None:
     """
-    Load a TOML config. If 'path_opt' is given, use it. Otherwise try the
-    default file name in CWD. Returns {} if no file is found.
-    """
-    if path_opt:
-        p = Path(path_opt)
-        if not p.is_file():
-            raise FileNotFoundError(f"Config not found: {p}")
-        with p.open("rb") as f:
-            return tomllib.load(f)
-
-    # Auto-discover default file if present
-    p = Path.cwd() / DEFAULT_CONFIG_FILE
-    if p.is_file():
-        with p.open("rb") as f:
-            return tomllib.load(f)
-    return {}
-
-
-# ---------- Logging ----------
-def setup_logging(verbosity: int) -> None:
-    """
-    Configure logging based on verbosity level.
+    Validate that changes are within configured thresholds.
 
     Args:
-        verbosity: 0 = WARNING, 1 = INFO, 2+ = DEBUG
+        summary: Comparison results
+        args: Configuration with threshold limits
+
+    Raises:
+        SystemExit: Exits with code 2 if thresholds are exceeded
     """
-    if verbosity >= 2:
-        level = logging.DEBUG
-    elif verbosity == 1:
-        level = logging.INFO
-    else:
-        level = logging.WARNING
-
-    # JSON-structured logging for easier parsing
-    class JSONFormatter(logging.Formatter):
-        def format(self, record: logging.LogRecord) -> str:
-            log_obj = {
-                "timestamp": self.formatTime(record, self.datefmt),
-                "level": record.levelname,
-                "message": record.getMessage(),
-            }
-            if record.exc_info:
-                log_obj["exception"] = self.formatException(record.exc_info)
-            return json.dumps(log_obj)
-
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(JSONFormatter(datefmt="%Y-%m-%dT%H:%M:%S"))
-
-    logging.root.setLevel(level)
-    logging.root.handlers.clear()
-    logging.root.addHandler(handler)
-
-
-# ---------- Core helpers ----------
-def _merge(a: Mapping[str, Any] | None, b: Mapping[str, Any] | None) -> VarsMap:
-    out: VarsMap = dict(a or {})
-    if b:
-        out.update(b)
-    return out
-
-
-def _render_markdown(summary: dict[str, Any]) -> str:
-    lines = []
-    lines.append("# Inventory Semantic Summary\n")
-    lines.append(f"- **Current hosts**: {summary['current_hosts']}")
-    lines.append(f"- **New hosts**: {summary['new_hosts']}")
-    lines.append(
-        f"- **Host delta**: {summary['host_delta']} ({summary['host_delta_pct']}%)\n"
-    )
-
-    if summary["host_added"]:
-        lines.append("## Hosts Added")
-        for h in summary["host_added"]:
-            lines.append(f"- `{h}`")
-        lines.append("")
-
-    if summary["host_removed"]:
-        lines.append("## Hosts Removed")
-        for h in summary["host_removed"]:
-            lines.append(f"- `{h}`")
-        lines.append("")
-
-    lines.append("## Variable Changes (across common hosts)")
-    lines.append(
-        f"- **Total var changes**: "
-        f"{summary['var_changes_total']} ({summary['var_change_pct']}%)"
-    )
-    lines.append(f"- **Baseline var keys**: {summary['var_baseline_keys']}\n")
-
-    if summary.get("sample_per_host_changes"):
-        lines.append("### Sample per-host changes")
-        for host, changes in summary["sample_per_host_changes"].items():
-            lines.append(f"- **{host}**")
-            if changes["added_keys"]:
-                lines.append(
-                    f"  - added: {', '.join(f'`{k}`' for k in changes['added_keys'])}"
-                )
-            if changes["removed_keys"]:
-                lines.append(
-                    "  - removed: "
-                    f"{', '.join(f'`{k}`' for k in changes['removed_keys'])}"
-                )
-            if changes["changed_values"]:
-                lines.append(
-                    "  - value changes: "
-                    f"{', '.join(f'`{k}`' for k in changes['changed_values'])}"
-                )
-        lines.append("")
-
-    lim = summary["limits"]
-    lines.append("## Limits")
-    lines.append(f"- max_host_change_pct: {lim['max_host_change_pct']}")
-    lines.append(f"- max_var_change_pct: {lim['max_var_change_pct']}")
-    lines.append(f"- max_host_change_abs: {lim['max_host_change_abs']}")
-    lines.append(f"- max_var_change_abs: {lim['max_var_change_abs']}")
-    if lim["ignored_key_regex"]:
-        lines.append(
-            "- ignored_key_regex: "
-            f"{', '.join(f'`{p}`' for p in lim['ignored_key_regex'])}"
+    # Check host change percentage
+    if summary.host_delta_pct > args.max_host_change_pct:
+        logger.error(
+            "Guard check failed: Host delta %d (%.2f%%) exceeds limit %.1f%%",
+            summary.host_delta,
+            summary.host_delta_pct,
+            args.max_host_change_pct,
         )
-    lines.append("")
-    return "\n".join(lines)
-
-
-def _is_scalar(x: Any) -> bool:
-    return isinstance(x, (str, int, float, bool)) or x is None
-
-
-def collect_effective_hostvars(inv_root: YAMLNode | None) -> HostVars:
-    """
-    Walk the inventory tree (group/host/children) and compute the effective
-    host var mapping, merging group vars down to each host.
-    """
-    hosts: HostVars = {}
-    if not inv_root:
-        return hosts
-
-    allnode: YAMLNode = inv_root.get("all", inv_root)
-
-    def walk(group_node: YAMLNode, inherited_vars: VarsMap) -> None:
-        if not isinstance(group_node, Mapping):
-            return
-
-        group_vars_raw = group_node.get("vars")
-        group_vars = dict(group_vars_raw) if isinstance(group_vars_raw, Mapping) else {}
-        merged = _merge(inherited_vars, group_vars)
-
-        grp_hosts_raw = group_node.get("hosts")
-        grp_hosts = dict(grp_hosts_raw) if isinstance(grp_hosts_raw, Mapping) else {}
-
-        for host, hv in grp_hosts.items():
-            hv_map = dict(hv) if isinstance(hv, Mapping) else {}
-            eff = _merge(merged, hv_map)
-            prev = hosts.get(host, {})
-            hosts[host] = _merge(prev, eff)
-
-        children_raw = group_node.get("children")
-        children = dict(children_raw) if isinstance(children_raw, Mapping) else {}
-        for _name, child in children.items():
-            if isinstance(child, Mapping):
-                walk(child, merged)
-
-    walk(allnode, {})
-    return hosts
-
-
-def filter_vars(d: VarsMap, ignored_regexes: list[re.Pattern[str]]) -> VarsMap:
-    """
-    Return a copy of vars with keys matching any ignore regex removed.
-    """
-    if not ignored_regexes:
-        return d
-    out: VarsMap = {}
-    for k, v in d.items():
-        if any(rx.search(k) for rx in ignored_regexes):
-            continue
-        out[k] = v
-    return out
-
-
-def canon(v: Any) -> str:
-    try:
-        return json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-    except TypeError:
-        return repr(v)
-
-
-def normalize_for_compare(
-    key: str,
-    value: Any,
-    setlike_key_patterns: list[re.Pattern[str]],
-) -> Any:
-    """
-    For keys configured as set-like, treat list-of-scalars as unordered:
-    deduplicate and sort by canonical form before comparing.
-    """
-    if isinstance(value, list) and any(p.search(key) for p in setlike_key_patterns):
-        if all(_is_scalar(i) for i in value):
-            canon_items = sorted({canon(i) for i in value})
-            return canon_items
-    return value
-
-
-# ---------- CLI ----------
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """
-    Build CLI arguments. Many defaults are None so we can merge config
-    values later (config -> CLI-defaults), and keep CLI explicit args
-    highest precedence.
-    """
-    ap = argparse.ArgumentParser(
-        description="Semantic guard for Ansible inventory changes.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    ap.add_argument("--config", default="", help="Path to a TOML config file")
-    ap.add_argument("--current", default="", help="Path to current inventory")
-    ap.add_argument("--new", default="", help="Path to candidate inventory")
-    ap.add_argument(
-        "--max-host-change-pct",
-        type=float,
-        default=None,
-        help=f"Max %% host churn vs current (default {DEFAULT_MAX_HOST_CHANGE_PCT})",
-    )
-    ap.add_argument(
-        "--max-var-change-pct",
-        type=float,
-        default=None,
-        help=f"Max %% var key changes (default {DEFAULT_MAX_VAR_CHANGE_PCT})",
-    )
-    ap.add_argument(
-        "--max-host-change-abs",
-        type=int,
-        default=None,
-        help=f"Absolute host churn cap (default {DEFAULT_MAX_HOST_CHANGE_ABS})",
-    )
-    ap.add_argument(
-        "--max-var-change-abs",
-        type=int,
-        default=None,
-        help=f"Absolute var change cap (default {DEFAULT_MAX_VAR_CHANGE_ABS})",
-    )
-    ap.add_argument(
-        "--ignore-key-regex",
-        action="append",
-        default=None,
-        help="Regex for volatile var keys to ignore (repeatable)",
-    )
-    ap.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Increase verbosity (-v for INFO, -vv for DEBUG)",
-    )
-    ap.add_argument(
-        "--json",
-        action="store_true",
-        default=False,
-        help="Output JSON summary to stdout",
-    )
-    ap.add_argument("--json-out", default=None, help="Write JSON summary to path")
-    ap.add_argument("--report", default=None, help="Write Markdown report to path")
-    ap.add_argument(
-        "--set-like-key-regex",
-        action="append",
-        default=None,
-        help=(
-            "Keys to treat as unordered sets if value is list-of-scalars "
-            f"(default {DEFAULT_SETLIKE_KEYS!r})"
-        ),
-    )
-    return ap.parse_args(argv)
-
-
-def merge_with_config(ns: argparse.Namespace) -> argparse.Namespace:
-    """
-    Merge CLI args with TOML config and built-in defaults.
-    Precedence: CLI explicit > config > built-in defaults.
-    """
-    cfg = load_config(ns.config or "")
-
-    def get_cfg(key: str, default: Any = None) -> Any:
-        # allow both flat and a simple [inventory_guard] table
-        if key in cfg:
-            return cfg[key]
-        table = cfg.get("inventory_guard", {})
-        if isinstance(table, dict) and key in table:
-            return table[key]
-        return default
-
-    def pick(value_cli, key_cfg: str, default_val):
-        return value_cli if value_cli is not None else get_cfg(key_cfg, default_val)
-
-    current = ns.current or get_cfg("current", "")
-    new = ns.new or get_cfg("new", "")
-
-    max_host_change_pct = pick(
-        ns.max_host_change_pct,
-        "max_host_change_pct",
-        DEFAULT_MAX_HOST_CHANGE_PCT,
-    )
-    max_var_change_pct = pick(
-        ns.max_var_change_pct, "max_var_change_pct", DEFAULT_MAX_VAR_CHANGE_PCT
-    )
-    max_host_change_abs = pick(
-        ns.max_host_change_abs,
-        "max_host_change_abs",
-        DEFAULT_MAX_HOST_CHANGE_ABS,
-    )
-    max_var_change_abs = pick(
-        ns.max_var_change_abs, "max_var_change_abs", DEFAULT_MAX_VAR_CHANGE_ABS
-    )
-
-    ignore_key_regex = (
-        ns.ignore_key_regex
-        if ns.ignore_key_regex is not None
-        else get_cfg("ignore_key_regex", [])
-    )
-    set_like_key_regex = (
-        ns.set_like_key_regex
-        if ns.set_like_key_regex is not None
-        else get_cfg("set_like_key_regex", DEFAULT_SETLIKE_KEYS)
-    )
-
-    json_out = ns.json_out if ns.json_out is not None else get_cfg("json_out", "")
-    report = ns.report if ns.report is not None else get_cfg("report", "")
-
-    # Verbosity and json flags are CLI-only (not configurable via TOML)
-    verbose = getattr(ns, "verbose", 0)
-    output_json = getattr(ns, "json", False)
-
-    # Validate required paths
-    if not current:
-        raise SystemExit("--current is required (CLI or TOML)")
-    if not new:
-        raise SystemExit("--new is required (CLI or TOML)")
-
-    merged = argparse.Namespace(
-        current=current,
-        new=new,
-        max_host_change_pct=float(max_host_change_pct),
-        max_var_change_pct=float(max_var_change_pct),
-        max_host_change_abs=int(max_host_change_abs),
-        max_var_change_abs=int(max_var_change_abs),
-        ignore_key_regex=list(ignore_key_regex or []),
-        set_like_key_regex=list(set_like_key_regex or []),
-        json_out=str(json_out or ""),
-        report=str(report or ""),
-        verbose=int(verbose),
-        json=bool(output_json),
-    )
-    return merged
-
-
-# ---------- Output helpers ----------
-def _json_default(o: Any) -> Any:
-    """JSON serializer for dataclasses and sets."""
-    if is_dataclass(o) and not isinstance(o, type):
-        return asdict(o)
-    if isinstance(o, set):
-        return sorted(o)
-    raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
-
-
-def output_json_stdout(summary: Summary) -> None:
-    """Write JSON summary to stdout."""
-    print(
-        json.dumps(
-            summary,
-            default=_json_default,
-            indent=2,
-            ensure_ascii=False,
-        )
-    )
-
-
-def write_json_file(summary: Summary, path: str) -> None:
-    """Write JSON summary to file."""
-    logger.info("Writing JSON summary to %s", path)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(
-            summary,
-            f,
-            default=_json_default,
-            indent=2,
-            ensure_ascii=False,
-        )
-
-
-def write_markdown_report(summary: Summary, path: str) -> None:
-    """Write Markdown report to file."""
-    logger.info("Writing Markdown report to %s", path)
-    summary_dict = json.loads(json.dumps(summary, default=_json_default))
-    md = _render_markdown(summary_dict)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(md)
-
-
-# ---------- Main ----------
-def main() -> None:
-    args_cli = parse_args()
-    args = merge_with_config(args_cli)
-
-    # Setup logging based on verbosity
-    setup_logging(args.verbose)
-
-    logger.info("Starting inventory comparison")
-    logger.debug("Config: current=%s, new=%s", args.current, args.new)
-
-    try:
-        ignored_regexes: list[re.Pattern[str]] = [
-            re.compile(p) for p in args.ignore_key_regex
-        ]
-    except re.error as e:
-        logger.error("Invalid ignore_key_regex pattern: %s", e)
-        sys.exit(1)
-
-    try:
-        setlike_key_patterns: list[re.Pattern[str]] = [
-            re.compile(p) for p in args.set_like_key_regex
-        ]
-    except re.error as e:
-        logger.error("Invalid set_like_key_regex pattern: %s", e)
-        sys.exit(1)
-
-    logger.info("Loading current inventory: %s", args.current)
-    try:
-        current = load_yaml(args.current)
-    except FileNotFoundError:
-        logger.error("Current inventory file not found: %s", args.current)
-        sys.exit(1)
-    except Exception as e:
-        logger.error("Failed to load current inventory: %s", e)
-        sys.exit(1)
-
-    logger.info("Loading new inventory: %s", args.new)
-    try:
-        new = load_yaml(args.new)
-    except FileNotFoundError:
-        logger.error("New inventory file not found: %s", args.new)
-        sys.exit(1)
-    except Exception as e:
-        logger.error("Failed to load new inventory: %s", e)
-        sys.exit(1)
-
-    logger.info("Computing effective host variables")
-    current_hosts = collect_effective_hostvars(current)
-    new_hosts = collect_effective_hostvars(new)
-
-    current_host_set: set[str] = set(current_hosts)
-    new_host_set: set[str] = set(new_hosts)
-
-    logger.debug(
-        "Current hosts: %d, New hosts: %d", len(current_host_set), len(new_host_set)
-    )
-
-    added_hosts: list[str] = sorted(new_host_set - current_host_set)
-    removed_hosts: list[str] = sorted(current_host_set - new_host_set)
-
-    host_delta: int = len(added_hosts) + len(removed_hosts)
-    current_host_count: int = max(1, len(current_host_set))
-    host_delta_pct: float = (host_delta / current_host_count) * 100.0
-
-    if added_hosts:
-        logger.info("Hosts added: %d", len(added_hosts))
-        logger.debug("Added hosts: %s", added_hosts[:5])
-    if removed_hosts:
-        logger.info("Hosts removed: %d", len(removed_hosts))
-        logger.debug("Removed hosts: %s", removed_hosts[:5])
-
-    common_hosts: list[str] = sorted(current_host_set & new_host_set)
-    logger.info("Comparing variables for %d common hosts", len(common_hosts))
-
-    var_changes: int = 0
-    var_baseline_keys: int = 0
-    per_host_changes: dict[str, dict[str, list[str]]] = {}
-
-    for h in common_hosts:
-        cvars = filter_vars(deepcopy(current_hosts[h]), ignored_regexes)
-        nvars = filter_vars(deepcopy(new_hosts[h]), ignored_regexes)
-
-        ckeys: set[str] = set(cvars.keys())
-        nkeys: set[str] = set(nvars.keys())
-
-        added_keys: list[str] = sorted(nkeys - ckeys)
-        removed_keys: list[str] = sorted(ckeys - nkeys)
-        common_keys: set[str] = ckeys & nkeys
-
-        changed_values: list[str] = []
-        for k in sorted(common_keys):
-            cv = normalize_for_compare(k, cvars.get(k), setlike_key_patterns)
-            nv = normalize_for_compare(k, nvars.get(k), setlike_key_patterns)
-            if canon(cv) != canon(nv):
-                changed_values.append(k)
-                logger.debug("Host %s: variable '%s' changed", h, k)
-
-        changes_for_h: int = len(added_keys) + len(removed_keys) + len(changed_values)
-        var_changes += changes_for_h
-        var_baseline_keys += len(ckeys)
-
-        if changes_for_h:
-            logger.debug(
-                "Host %s: %d changes (%d added, %d removed, %d modified)",
-                h,
-                changes_for_h,
-                len(added_keys),
-                len(removed_keys),
-                len(changed_values),
-            )
-            per_host_changes[h] = {
-                "added_keys": added_keys,
-                "removed_keys": removed_keys,
-                "changed_values": changed_values,
-            }
-
-    var_baseline_keys = max(1, var_baseline_keys)
-    var_change_pct: float = (var_changes / var_baseline_keys) * 100.0
-
-    logger.info(
-        "Summary: %d host changes (%.2f%%), %d variable changes (%.2f%%)",
-        host_delta,
-        host_delta_pct,
-        var_changes,
-        var_change_pct,
-    )
-
-    limits = Limits(
-        max_host_change_pct=args.max_host_change_pct,
-        max_var_change_pct=args.max_var_change_pct,
-        max_host_change_abs=args.max_host_change_abs,
-        max_var_change_abs=args.max_var_change_abs,
-        ignored_key_regex=args.ignore_key_regex,
-    )
-
-    summary = Summary(
-        current_hosts=len(current_host_set),
-        new_hosts=len(new_host_set),
-        host_added=added_hosts,
-        host_removed=removed_hosts,
-        host_delta=host_delta,
-        host_delta_pct=round(host_delta_pct, 3),
-        var_changes_total=var_changes,
-        var_change_pct=round(var_change_pct, 3),
-        var_baseline_keys=var_baseline_keys,
-        limits=limits,
-        sample_per_host_changes={
-            h: per_host_changes[h] for h in list(per_host_changes)[:20]
-        },
-    )
-
-    # Output JSON to stdout if requested
-    if args.json:
-        output_json_stdout(summary)
-
-    # Write optional output files
-    if args.json_out:
-        try:
-            write_json_file(summary, args.json_out)
-        except Exception as e:
-            logger.error("Failed to write JSON file: %s", e)
-            sys.exit(1)
-
-    if args.report:
-        try:
-            write_markdown_report(summary, args.report)
-        except Exception as e:
-            logger.error("Failed to write Markdown report: %s", e)
-            sys.exit(1)
-
-    # Check thresholds
-    def fail(msg: str) -> None:
-        logger.error("Guard check failed: %s", msg)
         sys.exit(2)
 
-    if host_delta_pct > args.max_host_change_pct:
-        fail(
-            f"Host delta {host_delta} ({host_delta_pct:.2f}%) "
-            f"exceeds limit {args.max_host_change_pct}%"
+    # Check absolute host change limit
+    if args.max_host_change_abs and summary.host_delta > args.max_host_change_abs:
+        logger.error(
+            "Guard check failed: Host delta %d exceeds absolute cap %d",
+            summary.host_delta,
+            args.max_host_change_abs,
         )
+        sys.exit(2)
 
-    if args.max_host_change_abs and host_delta > args.max_host_change_abs:
-        fail(f"Host delta {host_delta} exceeds absolute cap {args.max_host_change_abs}")
-
-    if var_change_pct > args.max_var_change_pct:
-        fail(
-            f"Variable changes {var_changes} ({var_change_pct:.2f}%) "
-            f"exceed limit {args.max_var_change_pct}%"
+    # Check variable change percentage
+    if summary.var_change_pct > args.max_var_change_pct:
+        logger.error(
+            "Guard check failed: Variable changes %d (%.2f%%) exceed limit %.1f%%",
+            summary.var_changes_total,
+            summary.var_change_pct,
+            args.max_var_change_pct,
         )
+        sys.exit(2)
 
-    if args.max_var_change_abs and var_changes > args.max_var_change_abs:
-        fail(
-            f"Variable changes {var_changes} exceed absolute "
-            f"cap {args.max_var_change_abs}"
+    # Check absolute variable change limit
+    if args.max_var_change_abs and summary.var_changes_total > args.max_var_change_abs:
+        logger.error(
+            "Guard check failed: Variable changes %d exceed absolute cap %d",
+            summary.var_changes_total,
+            args.max_var_change_abs,
         )
+        sys.exit(2)
 
     logger.info("All checks passed")
+
+
+def main() -> None:
+    """Main entry point - orchestrates the inventory comparison workflow."""
+    # Parse configuration
+    args = config.parse_and_merge()
+
+    # Setup logging based on verbosity
+    config.setup_logging(args.verbose)
+
+    # Run comparison
+    try:
+        summary = compare.run_comparison(args)
+    except FileNotFoundError as e:
+        logger.error("File not found: %s", e)
+        sys.exit(1)
+    except ValueError as e:
+        logger.error("Invalid input: %s", e)
+        sys.exit(1)
+    except Exception as e:
+        logger.error("Unexpected error during comparison: %s", e)
+        sys.exit(1)
+
+    # Generate outputs
+    try:
+        if args.json:
+            output.output_json_stdout(summary)
+
+        if args.json_out:
+            output.write_json_file(summary, args.json_out)
+
+        if args.report:
+            output.write_markdown_report(summary, args.report)
+    except Exception as e:
+        logger.error("Failed to write output: %s", e)
+        sys.exit(1)
+
+    # Validate thresholds
+    validate_thresholds(summary, args)
+
+    # Success
     sys.exit(0)
 
 
