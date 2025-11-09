@@ -87,8 +87,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     ap.add_argument("--config", default="", help="Path to a TOML config file")
-    ap.add_argument("--current", default="", help="Path to current inventory")
-    ap.add_argument("--new", default="", help="Path to candidate inventory")
+    ap.add_argument("-c", "--current", default="", help="Path to current inventory")
+    ap.add_argument("-n", "--new", default="", help="Path to candidate inventory")
     ap.add_argument(
         "--max-host-change-pct",
         type=float,

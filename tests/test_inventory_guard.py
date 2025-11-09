@@ -399,3 +399,28 @@ def test_file_not_found_error(tmp_path, base_inventory):
     )
     assert proc.returncode == 1, "Should exit with code 1 for file errors"
     assert "not found" in proc.stderr.lower() or "error" in proc.stderr.lower()
+
+
+def test_short_flags_work(tmp_path, base_inventory, inventory_small_change):
+    """Test that short flags -c and -n work as alternatives."""
+    current_p = tmp_path / "current.yaml"
+    new_p = tmp_path / "new.yaml"
+    current_p.write_text(base_inventory, encoding="utf-8")
+    new_p.write_text(inventory_small_change, encoding="utf-8")
+
+    # Use short flags
+    proc = subprocess.run(
+        [
+            "inventory-guard",
+            "-c", str(current_p),
+            "-n", str(new_p),
+            "--max-host-change-pct", "100",
+            "--max-var-change-pct", "100",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr
+    summary = parse_summary(proc.stdout)
+    assert summary["var_changes_total"] >= 1

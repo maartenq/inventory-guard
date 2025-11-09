@@ -33,23 +33,27 @@ pip install inventory-guard
 Compare two inventory files (silent on success):
 
 ```sh
+# Using long flags (explicit)
 inventory-guard \
   --current inventory/prod.yml \
   --new inventory/prod-updated.yml \
   --max-host-change-pct 5.0 \
   --max-var-change-pct 2.0
+
+# Using short flags (concise)
+inventory-guard -c inventory/prod.yml -n inventory/prod-updated.yml
 ```
 
 Get verbose output to see what's happening:
 
 ```sh
-inventory-guard -v --current inventory/prod.yml --new inventory/prod-updated.yml
+inventory-guard -v -c inventory/prod.yml -n inventory/prod-updated.yml
 ```
 
 Get JSON summary for further processing:
 
 ```sh
-inventory-guard --json --current inventory/prod.yml --new inventory/prod-updated.yml | jq
+inventory-guard --json -c inventory/prod.yml -n inventory/prod-updated.yml | jq
 ```
 
 By default, successful runs produce no output (Unix philosophy: no news is good
@@ -97,8 +101,8 @@ inventory-guard
 ```
 --config PATH              Path to TOML config (default:
                            ./inventory_semantic_guard.toml)
---current PATH             Current inventory file (required)
---new PATH                 New inventory file (required)
+-c, --current PATH         Current inventory file (required unless in config)
+-n, --new PATH             New inventory file (required unless in config)
 --max-host-change-pct N    Max % of hosts that can be added/removed
                            (default: 5.0)
 --max-var-change-pct N     Max % of variable keys that can change
