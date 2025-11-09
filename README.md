@@ -257,7 +257,7 @@ Some keys change on every run (timestamps, build IDs). Ignore them:
 Clone and setup:
 
 ```sh
-git clone https://github.com/maartenq/inventory_guard.git
+git clone https://github.com/maartenq/inventory-guard.git
 cd inventory_guard
 task install
 ```
@@ -284,4 +284,4 @@ MIT License (see LICENSE file)
 
 ## Contributing
 
-Issues and pull requests welcome at https://github.com/maartenq/inventory_guard
+Issues and pull requests welcome at https://github.com/maartenq/inventory-guard

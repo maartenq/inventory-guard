@@ -27,9 +27,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/maartenq/inventory_guard"
-Repository = "https://github.com/maartenq/inventory_guard"
-Issues = "https://github.com/maartenq/inventory_guard/issues"
+Homepage = "https://github.com/maartenq/inventory-guard"
+Repository = "https://github.com/maartenq/inventory-guard"
+Issues = "https://github.com/maartenq/inventory-guard/issues"
 
 [project.scripts]
 inventory-guard = "inventory_guard.main:main"
