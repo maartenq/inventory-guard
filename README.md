@@ -1,10 +1,13 @@
 # Inventory Guard
 
-A semantic change guard for Ansible inventories that detects unexpected infrastructure changes before they reach production.
+A semantic change guard for Ansible inventories that detects unexpected
+infrastructure changes before they reach production.
 
 ## What It Does
 
-Inventory Guard compares two Ansible inventory files (current vs. new) and flags changes that exceed your configured thresholds. Instead of blindly accepting inventory updates, you can:
+Inventory Guard compares two Ansible inventory files (current vs. new) and
+flags changes that exceed your configured thresholds. Instead of blindly
+accepting inventory updates, you can:
 
 - **Catch accidents**: Detect when a typo removes 50 hosts instead of 5
 - **Prevent drift**: Alert when variable changes exceed expected patterns
@@ -13,7 +16,7 @@ Inventory Guard compares two Ansible inventory files (current vs. new) and flags
 
 ## Installation
 
-```bash
+```sh
 # With uv (recommended)
 uv pip install inventory-guard
 
@@ -23,7 +26,7 @@ pip install inventory-guard
 
 ## Quick Start
 
-```bash
+```sh
 # Compare two inventory files
 inventory-guard \
   --current inventory/prod.yml \
@@ -67,20 +70,24 @@ report = "changes.md"
 
 Then run without arguments:
 
-```bash
+```sh
 inventory-guard
 ```
 
 ## CLI Options
 
 ```
---config PATH              Path to TOML config (default: ./inventory_semantic_guard.toml)
+--config PATH              Path to TOML config (default:
+                           ./inventory_semantic_guard.toml)
 --current PATH             Current inventory file (required)
 --new PATH                 New inventory file (required)
---max-host-change-pct N    Max % of hosts that can be added/removed (default: 5.0)
---max-var-change-pct N     Max % of variable keys that can change (default: 2.0)
+--max-host-change-pct N    Max % of hosts that can be added/removed
+                           (default: 5.0)
+--max-var-change-pct N     Max % of variable keys that can change
+                           (default: 2.0)
 --max-host-change-abs N    Absolute cap on host changes (default: 0 = disabled)
---max-var-change-abs N     Absolute cap on variable changes (default: 0 = disabled)
+--max-var-change-abs N     Absolute cap on variable changes
+                           (default: 0 = disabled)
 --ignore-key-regex REGEX   Variable keys to ignore (repeatable)
 --set-like-key-regex REGEX Treat list values as unordered sets (repeatable)
 --json-out PATH            Write JSON summary to file
@@ -90,9 +97,11 @@ inventory-guard
 ## How It Works
 
 1. **Loads both inventories**: Parses YAML with Ansible vault tag support
-2. **Computes effective variables**: Merges group vars and host vars following Ansible precedence
+2. **Computes effective variables**: Merges group vars and host vars following
+   Ansible precedence
 3. **Compares hosts**: Detects added/removed hosts
-4. **Compares variables**: For common hosts, counts variable key additions, removals, and value changes
+4. **Compares variables**: For common hosts, counts variable key additions,
+   removals, and value changes
 5. **Applies thresholds**: Fails if changes exceed configured limits
 6. **Generates reports**: Outputs JSON summary and optional Markdown report
 
@@ -110,7 +119,8 @@ inventory-guard
 # .gitlab-ci.yml
 inventory-check:
   script:
-    - inventory-guard --current $CI_PROJECT_DIR/inventory/prod.yml --new $CI_PROJECT_DIR/inventory/prod-new.yml
+    - inventory-guard --current $CI_PROJECT_DIR/inventory/prod.yml
+      --new $CI_PROJECT_DIR/inventory/prod-new.yml
   only:
     - merge_requests
 ```
@@ -131,7 +141,7 @@ repos:
 
 ### Manual Review
 
-```bash
+```sh
 # Generate a detailed report for manual review
 inventory-guard \
   --current prod.yml \
@@ -153,22 +163,27 @@ less changes.md
 
 ### Ansible Vault Support
 
-Inventory Guard parses `!vault` tags as opaque strings. Encrypted values are compared as-is:
+Inventory Guard parses `!vault` tags as opaque strings. Encrypted values are
+compared as-is:
 
 ```yaml
 all:
   hosts:
     app-1:
       db_password: !vault |
-        $ANSIBLE_VAULT;1.1;AES256
-        deadbeefdeadbeef
+        $ANSIBLE_VAULT;1.2;AES256;dev
+        3061323363346134383765383366633364306163656130333837366131383833356565
+        3263363434623733343538653462613064333634333464660a66363362393939343931
+        6163623763653733393830633138333935326536323964393966663938653062633063
+        6664656334373166630a36373639326266646566343261393261303630396334326362
+        6330
 ```
 
 ### Set-like Keys
 
 For variables like host collections where order doesn't matter:
 
-```bash
+```sh
 --set-like-key-regex '^foreman_host_collections$'
 ```
 
@@ -178,29 +193,48 @@ This treats `[A, B, C]` and `[C, A, B]` as identical.
 
 Some keys change on every run (timestamps, build IDs). Ignore them:
 
-```bash
+```sh
 --ignore-key-regex '^build_id$' \
 --ignore-key-regex '^generated_at$'
 ```
 
 ## Development
 
-```bash
-# Clone the repo
-git clone https://gitlab.com/maartenq/inventory_guard.git
+- Clone the repo
+
+  ```sh
+  git clone https://gitlab.com/maartenq/inventory_guard.git
+  ```
+
+- Cd into inventory_guard
+
+```sh
 cd inventory_guard
+```
 
-# Install dependencies
-uv sync
+- Install dependencies
 
-# Run tests
-uv run pytest
+  ```sh
+  task install
+  ```
 
-# Run type checking
-uv run mypy src/
+- Run tests
 
-# Run linting
-task lint
+  ```sh
+  task test
+  ```
+
+- Run type checking
+
+  ```sh
+  task type
+  ```
+
+- Run linting
+  ```sh
+  task lint
+  ```
+
 ```
 
 ## License
@@ -210,3 +244,4 @@ MIT License (see LICENSE file)
 ## Contributing
 
 Issues and merge requests welcome at https://gitlab.com/maartenq/inventory_guard
+```
