@@ -16,39 +16,41 @@ accepting inventory updates, you can:
 
 ## Installation
 
-- With `uv` (recommended)
+With `uv` (recommended):
 
-  ```sh
-  uv add inventory-guard
-  ```
+```sh
+uv add inventory-guard
+```
 
-- With `pip`
-  ```
-  pip install inventory-guard
-  ```
+With `pip`:
+
+```sh
+pip install inventory-guard
+```
 
 ## Quick Start
 
-- Compare two inventory files (silent on success)
+Compare two inventory files (silent on success):
 
-  ```sh
-  inventory-guard \
-    --current inventory/prod.yml \
-    --new inventory/prod-updated.yml \
-    --max-host-change-pct 5.0 \
-    --max-var-change-pct 2.0
-  ```
+```sh
+inventory-guard \
+  --current inventory/prod.yml \
+  --new inventory/prod-updated.yml \
+  --max-host-change-pct 5.0 \
+  --max-var-change-pct 2.0
+```
 
-- Get verbose output to see what's happening
+Get verbose output to see what's happening:
 
-  ```sh
-  inventory-guard -v --current inventory/prod.yml --new inventory/prod-updated.yml
-  ```
+```sh
+inventory-guard -v --current inventory/prod.yml --new inventory/prod-updated.yml
+```
 
-- Get JSON summary for further processing
-  ```sh
-  inventory-guard --json --current inventory/prod.yml --new inventory/prod-updated.yml | jq
-  ```
+Get JSON summary for further processing:
+
+```sh
+inventory-guard --json --current inventory/prod.yml --new inventory/prod-updated.yml | jq
+```
 
 By default, successful runs produce no output (Unix philosophy: no news is good
 news). Use `-v` for INFO logs or `--json` for machine-readable output.
@@ -233,42 +235,29 @@ Some keys change on every run (timestamps, build IDs). Ignore them:
 
 ## Development
 
-- Clone the repo
+Clone and setup:
 
-  ```sh
-  git clone https://gitlab.com/maartenq/inventory_guard.git
-  cd inventory_guard
-  ```
+```sh
+git clone https://gitlab.com/maartenq/inventory_guard.git
+cd inventory_guard
+task install
+```
 
-- Install dependencies
+Run tests and checks:
 
-  ```sh
-  task install
-  ```
+```sh
+# Run tests
+task test
 
-- Run tests
+# Run type checking
+task type
 
-  ```sh
-  task test
-  ```
+# Run linting
+task lint
 
-- Run type checking
-
-  ```sh
-  task type
-  ```
-
-- Run linting
-
-  ```sh
-  task lint
-  ```
-
-- Run all checks (lint + type)
-
-  ```sh
-  task check
-  ```
+# Run all checks (lint + type)
+task check
+```
 
 ## License
 
