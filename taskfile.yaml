@@ -1,0 +1,57 @@
+---
+version: "3"
+
+tasks:
+  default:
+    silent: true
+    desc: Show all tasks
+    cmds:
+      - |-
+        if [ $(command -v "go-task") ]; then
+          go-task --list-all
+        else
+          task --list-all
+        fi
+
+  clean:
+    desc: Remove virtualenv and cache files
+    cmds:
+      - rm -rf
+        .venv
+        .pytest_cache
+        .mypy_cache
+        .ruff_cache
+        .coverage
+        htmlcov
+      - find {{ .TASK_DIR }} -type d -name "__pycache__" -exec rm -r {} +
+
+  lint:
+    desc: Run pre-commit on all files
+    cmds:
+      - pre-commit run --verbose --all-files --show-diff-on-failure
+      - uv run -m ty check
+
+  install:
+    desc: Sync virtualenv with `uv`
+    cmds:
+      - uv sync
+
+  fresh:
+    desc: Clean and install
+    cmds:
+      - task: clean
+      - task: install
+
+  test:
+    desc: Run pytest with forwarded args in uv
+    cmds:
+      - uv run -m pytest {{ .CLI_ARGS }}
+
+  cov:
+    desc: Run coverage
+    cmds:
+      - uv run -m coverage erase
+      - uv run -m coverage run -m pytest
+      - uv run -m coverage report
+      - uv run -m coverage html
+      - uv run -m webbrowser "htmlcov/index.html"

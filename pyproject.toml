@@ -1,0 +1,21 @@
+[project]
+name = "inventory-guard"
+version = "0.1.0"
+description = "Ansible Inventory Guard"
+readme = "README.md"
+requires-python = "==3.11.*"
+dependencies = [
+    "ruamel-yaml==0.18.*",
+]
+
+[dependency-groups]
+dev = [
+    "coverage>=7.10.7",
+    "mypy>=1.18.2",
+    "pytest",
+    "ty>=0.0.1a22",
+]
+
+[build-system]
+requires = ["uv-build"]
+build-backend = "uv_build"
