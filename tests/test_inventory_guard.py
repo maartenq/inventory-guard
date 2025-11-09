@@ -5,7 +5,6 @@ from textwrap import dedent
 
 import pytest
 
-
 # ---------- Fixtures ----------
 
 
@@ -412,10 +411,14 @@ def test_short_flags_work(tmp_path, base_inventory, inventory_small_change):
     proc = subprocess.run(
         [
             "inventory-guard",
-            "-c", str(current_p),
-            "-n", str(new_p),
-            "--max-host-change-pct", "100",
-            "--max-var-change-pct", "100",
+            "-c",
+            str(current_p),
+            "-n",
+            str(new_p),
+            "--max-host-change-pct",
+            "100",
+            "--max-var-change-pct",
+            "100",
             "--json",
         ],
         text=True,

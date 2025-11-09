@@ -41,9 +41,10 @@ tasks:
       - uv run -m webbrowser "htmlcov/index.html"
 
   lint:
-    desc: Run pre-commit on all files
+    desc: Run ruff linter and formatter
     cmds:
-      - pre-commit run --verbose --all-files --show-diff-on-failure
+      - uv run ruff check --fix src/ tests/
+      - uv run ruff format src/ tests/
 
   install:
     desc: Sync virtualenv with `uv`

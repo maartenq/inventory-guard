@@ -177,16 +177,19 @@ def normalize_for_compare(
     This allows treating certain lists (like host collections) as sets
     where order doesn't matter.
     """
-    if isinstance(value, list) and any(p.search(key) for p in setlike_key_patterns):
-        if all(_is_scalar(i) for i in value):
-            canon_items = sorted({canon(i) for i in value})
-            logger.debug(
-                "Normalized set-like key '%s' from %d to %d items",
-                key,
-                len(value),
-                len(canon_items),
-            )
-            return canon_items
+    if (
+        isinstance(value, list)
+        and any(p.search(key) for p in setlike_key_patterns)
+        and all(_is_scalar(i) for i in value)
+    ):
+        canon_items = sorted({canon(i) for i in value})
+        logger.debug(
+            "Normalized set-like key '%s' from %d to %d items",
+            key,
+            len(value),
+            len(canon_items),
+        )
+        return canon_items
     return value
 
 
@@ -210,9 +213,7 @@ def run_comparison(args: argparse.Namespace) -> Summary:
 
     # Compile regex patterns
     try:
-        ignored_regexes: list[re.Pattern[str]] = [
-            re.compile(p) for p in args.ignore_key_regex
-        ]
+        ignored_regexes: list[re.Pattern[str]] = [re.compile(p) for p in args.ignore_key_regex]
     except re.error as e:
         logger.error("Invalid ignore_key_regex pattern: %s", e)
         raise
@@ -254,9 +255,7 @@ def run_comparison(args: argparse.Namespace) -> Summary:
     current_host_set: set[str] = set(current_hosts)
     new_host_set: set[str] = set(new_hosts)
 
-    logger.debug(
-        "Current hosts: %d, New hosts: %d", len(current_host_set), len(new_host_set)
-    )
+    logger.debug("Current hosts: %d, New hosts: %d", len(current_host_set), len(new_host_set))
 
     # Compare hosts
     added_hosts: list[str] = sorted(new_host_set - current_host_set)
@@ -350,9 +349,7 @@ def run_comparison(args: argparse.Namespace) -> Summary:
         var_change_pct=round(var_change_pct, 3),
         var_baseline_keys=var_baseline_keys,
         limits=limits,
-        sample_per_host_changes={
-            h: per_host_changes[h] for h in list(per_host_changes)[:20]
-        },
+        sample_per_host_changes={h: per_host_changes[h] for h in list(per_host_changes)[:20]},
     )
 
     return summary

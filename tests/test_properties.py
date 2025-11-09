@@ -9,7 +9,6 @@ from hypothesis import strategies as st
 
 from inventory_guard import compare
 
-
 # ---------- Strategies for generating Ansible inventories ----------
 
 
@@ -201,7 +200,7 @@ def test_variable_inheritance(inventory):
         # Property: Every host should have inherited vars
         for host_name, host_vars_actual in hosts.items():
             # All group vars should be present (unless overridden)
-            for key, value in all_vars.items():
+            for key, _value in all_vars.items():
                 if key not in child_vars and key not in inventory["all"]["children"][
                     "webservers"
                 ]["hosts"].get(host_name, {}):
@@ -275,7 +274,7 @@ def test_canonicalization_stability(inventory):
         hosts = compare.collect_effective_hostvars(inv_data)
 
         # Property: Canonicalizing same value twice gives same result
-        for host_name, host_vars in hosts.items():
+        for _host_name, host_vars in hosts.items():
             for key, value in host_vars.items():
                 canon1 = compare.canon(value)
                 canon2 = compare.canon(value)
@@ -294,7 +293,7 @@ def test_filter_vars_preserves_unfiltered(inventory):
         hosts = compare.collect_effective_hostvars(inv_data)
 
         # Property: Empty filter list should preserve everything
-        for host_name, host_vars in hosts.items():
+        for _host_name, host_vars in hosts.items():
             filtered = compare.filter_vars(host_vars, [])
             assert filtered == host_vars, "Empty filter should preserve all vars"
 
