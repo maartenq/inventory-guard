@@ -1,0 +1,4 @@
+# file: /home/maarten/Repos/gitlab/maartenq/inventory_guard/src/inventory_guard/__init__.py
+# hypothesis_version: 6.147.0
+
+['0.2.0', '__version__']

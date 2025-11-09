@@ -83,7 +83,7 @@ def main() -> None:
     except FileNotFoundError as e:
         logger.error("File not found: %s", e)
         sys.exit(1)
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         logger.error("Invalid input: %s", e)
         sys.exit(1)
     except Exception as e:

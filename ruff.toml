@@ -51,12 +51,23 @@ select = [
     "YTT",  # flake8-2020
 ]
 ignore = [
-    "PGH003", # blanket-type-ignore
+    "PGH003",  # blanket-type-ignore (we use it for ruamel-yaml)
+    "TRY003",  # long exception messages (readable > dogmatic)
+    "TRY400",  # Use logging.error with raise is fine
+    "C901",    # complexity threshold (we accept some complexity)
+    "RUF005",  # collection-literal-concatenation (list + list is clear)
 ]
 
 [lint.per-file-ignores]
 "test_*.py" = [
-    "S101", # Allow asserts
+    "S101",  # Allow asserts in tests
+    "S603",  # Allow subprocess without shell=True in tests
+    "S607",  # Allow partial path in subprocess in tests
+]
+"tests/*.py" = [
+    "S101",  # Allow asserts in tests
+    "S603",  # Allow subprocess without shell=True in tests
+    "S607",  # Allow partial path in subprocess in tests
 ]
 [format]
 docstring-code-format = true

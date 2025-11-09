@@ -72,7 +72,7 @@ def load_yaml(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         data = yaml.load(f) or {}
     if not isinstance(data, dict):
-        raise ValueError(f"{path} is not a YAML mapping at root")
+        raise TypeError(f"{path} is not a YAML mapping at root")
     return dict(data)
 
 
