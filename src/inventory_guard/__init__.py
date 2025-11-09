@@ -1,1 +1,5 @@
-# ___init__.py
+"""Ansible Inventory Guard - Semantic change detection for Ansible inventories."""
+
+__version__ = "0.1.0"
+
+__all__ = ["__version__"]

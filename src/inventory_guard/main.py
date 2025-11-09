@@ -472,7 +472,7 @@ def main() -> None:
 
     # Human-readable + machine-readable
     def _json_default(o: Any):
-        if is_dataclass(o):
+        if is_dataclass(o) and not isinstance(o, type):
             return asdict(o)
         if isinstance(o, set):
             return sorted(o)
