@@ -8,6 +8,9 @@ dependencies = [
     "ruamel-yaml==0.18.*",
 ]
 
+[project.scripts]
+inventory-guard = "inventory_guard.main:main"
+
 [dependency-groups]
 dev = [
     "coverage>=7.10.7",
