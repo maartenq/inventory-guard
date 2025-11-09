@@ -16,30 +16,39 @@ accepting inventory updates, you can:
 
 ## Installation
 
-```sh
-# With uv (recommended)
-uv pip install inventory-guard
+- With uv (recommended)
 
-# With pip
-pip install inventory-guard
+```sh
+uv add inventory-guard
 ```
+
+- With pip
+  ```
+  pip install inventory-guard
+  ```
 
 ## Quick Start
 
-```sh
-# Compare two inventory files (silent on success)
-inventory-guard \
-  --current inventory/prod.yml \
-  --new inventory/prod-updated.yml \
-  --max-host-change-pct 5.0 \
-  --max-var-change-pct 2.0
+- Compare two inventory files (silent on success)
 
-# Get verbose output to see what's happening
-inventory-guard -v --current inventory/prod.yml --new inventory/prod-updated.yml
+  ```sh
+  inventory-guard \
+    --current inventory/prod.yml \
+    --new inventory/prod-updated.yml \
+    --max-host-change-pct 5.0 \
+    --max-var-change-pct 2.0
+  ```
 
-# Get JSON summary for further processing
-inventory-guard --json --current inventory/prod.yml --new inventory/prod-updated.yml | jq
-```
+- Get verbose output to see what's happening
+
+  ```sh
+  inventory-guard -v --current inventory/prod.yml --new inventory/prod-updated.yml
+  ```
+
+- Get JSON summary for further processing
+  ```sh
+  inventory-guard --json --current inventory/prod.yml --new inventory/prod-updated.yml | jq
+  ```
 
 By default, successful runs produce no output (Unix philosophy: no news is good
 news). Use `-v` for INFO logs or `--json` for machine-readable output.
@@ -224,26 +233,41 @@ Some keys change on every run (timestamps, build IDs). Ignore them:
 
 ## Development
 
+- Clone the repo
+
 ```sh
-# Clone the repo
 git clone https://gitlab.com/maartenq/inventory_guard.git
 cd inventory_guard
-
-# Install dependencies
-task install
-
-# Run tests
-task test
-
-# Run type checking
-task type
-
-# Run linting
-task lint
-
-# Run all checks (lint + type)
-task check
 ```
+
+- Install dependencies
+
+  ```sh
+  task install
+  ```
+
+- Run tests
+
+  ```sh
+  task test
+  ```
+
+- Run type checking
+
+  ```sh
+  task type
+  ```
+
+- Run linting
+
+  ```sh
+  task lint
+  ```
+
+- Run all checks (lint + type)
+  ```sh
+  task check
+  ```
 
 ## License
 
