@@ -3,6 +3,135 @@ import subprocess
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
+
+
+# ---------- Fixtures ----------
+
+
+@pytest.fixture
+def base_inventory():
+    """Basic inventory with one host."""
+    return dedent(
+        """
+        all:
+          vars:
+            env: prod
+          hosts:
+            app-1:
+              app_version: "1.0.0"
+        """
+    ).lstrip()
+
+
+@pytest.fixture
+def base_inventory_with_vault():
+    """Basic inventory with Ansible vault tag."""
+    return dedent(
+        """
+        all:
+          vars:
+            env: prod
+          hosts:
+            app-1:
+              app_version: "1.0.0"
+              somesecret: !vault |
+                $ANSIBLE_VAULT;1.1;AES256
+                deadbeefdeadbeef
+        """
+    ).lstrip()
+
+
+@pytest.fixture
+def inventory_small_change():
+    """Inventory with small variable change (version bump)."""
+    return dedent(
+        """
+        all:
+          vars:
+            env: prod
+          hosts:
+            app-1:
+              app_version: "1.0.1"
+        """
+    ).lstrip()
+
+
+@pytest.fixture
+def inventory_small_change_with_vault():
+    """Inventory with small change and vault tag."""
+    return dedent(
+        """
+        all:
+          vars:
+            env: prod
+          hosts:
+            app-1:
+              app_version: "1.0.1"
+              somesecret: !vault |
+                $ANSIBLE_VAULT;1.1;AES256
+                deadbeefdeadbeef
+        """
+    ).lstrip()
+
+
+@pytest.fixture
+def inventory_host_added():
+    """Inventory with an additional host."""
+    return dedent(
+        """
+        all:
+          vars:
+            env: prod
+          hosts:
+            app-1:
+              app_version: "1.0.0"
+            app-2:
+              app_version: "1.0.0"
+        """
+    ).lstrip()
+
+
+@pytest.fixture
+def inventory_noisy_key():
+    """Inventory with volatile key that should be ignored."""
+    return dedent(
+        """
+        all:
+          vars:
+            env: prod
+          hosts:
+            app-1:
+              app_version: "1.0.0"
+              build_id: "abc123"
+        """
+    ).lstrip()
+
+
+@pytest.fixture
+def lenient_thresholds():
+    """Lenient threshold arguments for tests that should pass."""
+    return [
+        "--max-host-change-pct",
+        "100",
+        "--max-var-change-pct",
+        "100",
+    ]
+
+
+@pytest.fixture
+def strict_thresholds():
+    """Strict threshold arguments for tests that should fail."""
+    return [
+        "--max-host-change-pct",
+        "0",
+        "--max-var-change-pct",
+        "0",
+    ]
+
+
+# ---------- Helper Functions ----------
+
 
 def run_guard(
     current_yaml: str,
@@ -52,94 +181,7 @@ def parse_summary(stdout: str) -> dict:
     return json.loads(s[start : end + 1])
 
 
-def base_inventory(with_vault: bool = False) -> str:
-    if with_vault:
-        return dedent(
-            """
-            all:
-              vars:
-                env: prod
-              hosts:
-                app-1:
-                  app_version: "1.0.0"
-                  somesecret: !vault |
-                    $ANSIBLE_VAULT;1.1;AES256
-                    deadbeefdeadbeef
-            """
-        ).lstrip()
-    else:
-        return dedent(
-            """
-            all:
-              vars:
-                env: prod
-              hosts:
-                app-1:
-                  app_version: "1.0.0"
-            """
-        ).lstrip()
-
-
-def inventory_with_small_changes(with_vault: bool = False) -> str:
-    """
-    Return an inventory similar to base_inventory(), but with a small change
-    (e.g., app_version bumped). Optionally includes a !vault secret block.
-    """
-    if with_vault:
-        return dedent(
-            """
-            all:
-              vars:
-                env: prod
-              hosts:
-                app-1:
-                  app_version: "1.0.1"
-                  somesecret: !vault |
-                    $ANSIBLE_VAULT;1.1;AES256
-                    deadbeefdeadbeef
-            """
-        ).lstrip()
-    else:
-        return dedent(
-            """
-            all:
-              vars:
-                env: prod
-              hosts:
-                app-1:
-                  app_version: "1.0.1"
-            """
-        ).lstrip()
-
-
-def inventory_with_host_add() -> str:
-    return dedent(
-        """
-        all:
-          vars:
-            env: prod
-          hosts:
-            app-1:
-              app_version: "1.0.0"
-            app-2:
-              app_version: "1.0.0"
-        """
-    ).lstrip()
-
-
-def inventory_with_noisy_key_change() -> str:
-    # only a volatile key changes; we will ignore it via --ignore-key-regex
-    return dedent(
-        """
-        all:
-          vars:
-            env: prod
-          hosts:
-            app-1:
-              app_version: "1.0.0"
-              build_id: "abc123"
-        """
-    ).lstrip()
+# ---------- Tests ----------
 
 
 def test_help_succeeds():
@@ -153,19 +195,20 @@ def test_help_succeeds():
     assert "Semantic guard for Ansible inventory changes." in proc.stdout
 
 
-def test_vault_tag_parses(tmp_path):
-    current_yaml = base_inventory(with_vault=True)
-    new_yaml = inventory_with_small_changes(with_vault=True)
+def test_vault_tag_parses(
+    tmp_path, base_inventory_with_vault, inventory_small_change_with_vault
+):
+    """Test that Ansible vault tags are parsed correctly."""
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory_with_vault,
+        inventory_small_change_with_vault,
         tmp_path,
         extra_args=[
             "--max-host-change-pct",
             "10",
             "--max-var-change-pct",
             "50",
-            "--json",  # Need --json flag to get JSON output
+            "--json",
         ],
     )
     assert proc.returncode == 0, proc.stderr
@@ -175,18 +218,17 @@ def test_vault_tag_parses(tmp_path):
     assert summary["new_hosts"] == 1
 
 
-def test_small_var_change_passes(tmp_path):
-    current_yaml = base_inventory()
-    new_yaml = inventory_with_small_changes()
+def test_small_var_change_passes(tmp_path, base_inventory, inventory_small_change):
+    """Test that small variable changes pass with lenient thresholds."""
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        inventory_small_change,
         tmp_path,
         extra_args=[
             "--max-host-change-pct",
-            "0",  # no host churn allowed
+            "0",
             "--max-var-change-pct",
-            "100",  # 1 change / 2 baseline keys = 50%; allow it
+            "100",
             "--json",
         ],
     )
@@ -196,71 +238,62 @@ def test_small_var_change_passes(tmp_path):
     assert summary["host_delta"] == 0
 
 
-def test_host_add_fails_when_threshold_low(tmp_path):
-    current_yaml = base_inventory()
-    new_yaml = inventory_with_host_add()
+def test_host_add_fails_when_threshold_low(
+    tmp_path, base_inventory, inventory_host_added, strict_thresholds
+):
+    """Test that adding hosts fails with strict thresholds."""
+    # Allow var changes but not host changes
+    args = ["--max-host-change-pct", "0", "--max-var-change-pct", "100"]
+
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        inventory_host_added,
         tmp_path,
-        extra_args=[
-            "--max-host-change-pct",
-            "0",
-            "--max-var-change-pct",
-            "100",
-        ],
+        extra_args=args,
     )
     assert proc.returncode == 2
-    # Error messages now go to stderr as JSON logs
     assert "Host delta" in proc.stderr or "exceeds limit" in proc.stderr
 
 
-def test_var_change_fails_when_threshold_low(tmp_path):
-    current_yaml = base_inventory()
-    new_yaml = inventory_with_small_changes()
+def test_var_change_fails_when_threshold_low(
+    tmp_path, base_inventory, inventory_small_change, strict_thresholds
+):
+    """Test that variable changes fail with strict thresholds."""
+    # Allow host changes but not var changes
+    args = ["--max-host-change-pct", "100", "--max-var-change-pct", "0"]
+
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        inventory_small_change,
         tmp_path,
-        extra_args=[
-            "--max-host-change-pct",
-            "100",
-            "--max-var-change-pct",
-            "0",
-        ],
+        extra_args=args,
     )
     assert proc.returncode == 2
-    # Error messages now go to stderr as JSON logs
     assert "Variable changes" in proc.stderr or "exceed limit" in proc.stderr
 
 
-def test_ignore_key_regex_allows_noisy_changes(tmp_path):
-    current_yaml = base_inventory()
-    new_yaml = inventory_with_noisy_key_change()
-    # Without ignore, adding 'build_id' would count as a var add/change
+def test_ignore_key_regex_allows_noisy_changes(
+    tmp_path, base_inventory, inventory_noisy_key
+):
+    """Test that ignore-key-regex filters out volatile keys."""
+    strict_args = ["--max-host-change-pct", "100", "--max-var-change-pct", "0"]
+
+    # Without ignore, adding 'build_id' should fail
     proc_strict = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        inventory_noisy_key,
         tmp_path,
-        extra_args=[
-            "--max-host-change-pct",
-            "100",
-            "--max-var-change-pct",
-            "0",
-        ],
+        extra_args=strict_args,
     )
-    assert proc_strict.returncode == 2  # should fail strictly
+    assert proc_strict.returncode == 2
 
     # With ignore, it should pass
     proc_ignored = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        inventory_noisy_key,
         tmp_path,
-        extra_args=[
-            "--max-host-change-pct",
-            "100",
-            "--max-var-change-pct",
-            "0",
+        extra_args=strict_args
+        + [
             "--ignore-key-regex",
             "^(build_id)$",
             "--json",
@@ -271,32 +304,23 @@ def test_ignore_key_regex_allows_noisy_changes(tmp_path):
     assert summary["var_changes_total"] == 0
 
 
-def test_silent_success_by_default(tmp_path):
+def test_silent_success_by_default(tmp_path, base_inventory):
     """Test that successful runs produce no stdout output by default."""
-    current_yaml = base_inventory()
-    new_yaml = base_inventory()  # identical
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        base_inventory,  # identical
         tmp_path,
-        extra_args=[
-            "--max-host-change-pct",
-            "10",
-            "--max-var-change-pct",
-            "10",
-        ],
+        extra_args=["--max-host-change-pct", "10", "--max-var-change-pct", "10"],
     )
     assert proc.returncode == 0
     assert proc.stdout.strip() == "", "Expected empty stdout without --json flag"
 
 
-def test_json_flag_produces_output(tmp_path):
+def test_json_flag_produces_output(tmp_path, base_inventory):
     """Test that --json flag produces JSON on stdout."""
-    current_yaml = base_inventory()
-    new_yaml = base_inventory()
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        base_inventory,
         tmp_path,
         extra_args=[
             "--max-host-change-pct",
@@ -312,57 +336,41 @@ def test_json_flag_produces_output(tmp_path):
     assert "current_hosts" in summary
 
 
-def test_verbose_flag_produces_logs(tmp_path):
+def test_verbose_flag_produces_logs(
+    tmp_path, base_inventory, inventory_small_change, lenient_thresholds
+):
     """Test that -v flag produces INFO logs on stderr."""
-    current_yaml = base_inventory()
-    new_yaml = inventory_with_small_changes()
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        inventory_small_change,
         tmp_path,
-        extra_args=[
-            "--max-host-change-pct",
-            "100",
-            "--max-var-change-pct",
-            "100",
-            "-v",
-        ],
+        extra_args=lenient_thresholds + ["-v"],
     )
     assert proc.returncode == 0
-    # Should have INFO level logs in stderr
     assert "INFO" in proc.stderr or "timestamp" in proc.stderr
 
 
-def test_debug_flag_produces_detailed_logs(tmp_path):
+def test_debug_flag_produces_detailed_logs(
+    tmp_path, base_inventory, inventory_small_change, lenient_thresholds
+):
     """Test that -vv flag produces DEBUG logs on stderr."""
-    current_yaml = base_inventory()
-    new_yaml = inventory_with_small_changes()
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        inventory_small_change,
         tmp_path,
-        extra_args=[
-            "--max-host-change-pct",
-            "100",
-            "--max-var-change-pct",
-            "100",
-            "-vv",
-        ],
+        extra_args=lenient_thresholds + ["-vv"],
     )
     assert proc.returncode == 0
-    # Should have DEBUG level logs in stderr
     assert "DEBUG" in proc.stderr or "timestamp" in proc.stderr
 
 
-def test_json_out_writes_file(tmp_path):
+def test_json_out_writes_file(tmp_path, base_inventory):
     """Test that --json-out writes JSON to a file."""
-    current_yaml = base_inventory()
-    new_yaml = base_inventory()
     json_file = tmp_path / "output.json"
 
     proc = run_guard(
-        current_yaml,
-        new_yaml,
+        base_inventory,
+        base_inventory,
         tmp_path,
         extra_args=[
             "--max-host-change-pct",
@@ -381,16 +389,13 @@ def test_json_out_writes_file(tmp_path):
     assert "current_hosts" in summary
 
 
-def test_file_not_found_error(tmp_path):
+def test_file_not_found_error(tmp_path, base_inventory):
     """Test proper exit code for missing files."""
     proc = run_guard(
-        base_inventory(),
-        base_inventory(),
+        base_inventory,
+        base_inventory,
         tmp_path,
-        extra_args=[
-            "--current",
-            "/nonexistent/file.yml",
-        ],
+        extra_args=["--current", "/nonexistent/file.yml"],
     )
     assert proc.returncode == 1, "Should exit with code 1 for file errors"
     assert "not found" in proc.stderr.lower() or "error" in proc.stderr.lower()
