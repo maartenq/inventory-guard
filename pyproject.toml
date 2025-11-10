@@ -1,6 +1,6 @@
 [project]
 name = "inventory-guard"
-version = "0.2.0"
+version = "0.3.0"
 description = "Semantic change guard for Ansible inventories - detect unexpected infrastructure changes"
 readme = "README.md"
 requires-python = ">=3.11"
