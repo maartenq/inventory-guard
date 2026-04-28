@@ -12,7 +12,7 @@ from typing import Any
 
 # ---------- Defaults ----------
 DEFAULT_MAX_HOST_CHANGE_PCT = 5.0
-DEFAULT_MAX_VAR_CHANGE_PCT = 2.0
+DEFAULT_MAX_VAR_CHANGE_PCT = 5.0
 DEFAULT_MAX_HOST_CHANGE_ABS = 0
 DEFAULT_MAX_VAR_CHANGE_ABS = 0
 DEFAULT_SETLIKE_KEYS = [r"^foreman_host_collections$"]

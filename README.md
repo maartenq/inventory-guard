@@ -38,7 +38,7 @@ inventory-guard \
   --current inventory/prod.yml \
   --new inventory/prod-updated.yml \
   --max-host-change-pct 5.0 \
-  --max-var-change-pct 2.0
+  --max-var-change-pct 5.0
 
 # Using short flags (concise)
 inventory-guard -c inventory/prod.yml -n inventory/prod-updated.yml
@@ -69,7 +69,7 @@ current = "inventory/prod.yml"
 new = "inventory/prod-updated.yml"
 
 max_host_change_pct = 5.0
-max_var_change_pct = 2.0
+max_var_change_pct = 5.0
 max_host_change_abs = 10
 max_var_change_abs = 50
 
@@ -106,7 +106,7 @@ inventory-guard
 --max-host-change-pct N    Max % of hosts that can be added/removed
                            (default: 5.0)
 --max-var-change-pct N     Max % of variable keys that can change
-                           (default: 2.0)
+                           (default: 5.0)
 --max-host-change-abs N    Absolute cap on host changes (default: 0 = disabled)
 --max-var-change-abs N     Absolute cap on variable changes
                            (default: 0 = disabled)
@@ -159,6 +159,7 @@ Logs are structured JSON on stderr for easy parsing:
 ### CI/CD Pipeline
 
 **GitHub Actions:**
+
 ```yaml
 # .github/workflows/inventory-check.yml
 name: Inventory Check
@@ -173,6 +174,7 @@ jobs:
 ```
 
 **GitLab CI:**
+
 ```yaml
 # .gitlab-ci.yml
 inventory-check:
@@ -286,7 +288,6 @@ This project uses GitHub Actions for continuous integration and deployment:
   - Linting (pre-commit hooks)
   - Type checking (ty + mypy)
   - Tests with coverage reporting
-  
 - **Release**: Triggered by version tags (e.g., `0.2.0`, `1.0.0a1`)
   - Validates version is newer than PyPI
   - Runs full test suite
@@ -297,7 +298,8 @@ This project uses GitHub Actions for continuous integration and deployment:
 To release a new version:
 
 ```sh
-# Update version in pyproject.toml, commit, then:
+# Update version in pyproject.toml and src/inventory_guard/__init__.py,
+# commit, then:
 git tag 0.2.0
 git push origin 0.2.0
 # GitHub Actions will handle the rest
@@ -312,6 +314,7 @@ MIT License (see LICENSE file)
 Issues and pull requests welcome at https://github.com/maartenq/inventory-guard
 
 Development setup:
+
 1. Fork the repository
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/inventory-guard.git`
 3. Install dependencies: `uv sync`
