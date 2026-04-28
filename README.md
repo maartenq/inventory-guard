@@ -300,8 +300,11 @@ To release a new version:
 ```sh
 # Update version in pyproject.toml and src/inventory_guard/__init__.py,
 # commit, then:
-git tag 0.2.0
-git push origin 0.2.0
+uv sync
+git add .
+git push
+git tag 0.4.0
+git push --tags
 # GitHub Actions will handle the rest
 ```
 
