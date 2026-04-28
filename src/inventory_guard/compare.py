@@ -11,7 +11,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from ruamel.yaml import YAML  # type: ignore
+from ruamel.yaml import YAML
 from ruamel.yaml.nodes import ScalarNode
 
 logger = logging.getLogger(__name__)
