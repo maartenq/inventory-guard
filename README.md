@@ -302,6 +302,7 @@ To release a new version:
 # commit, then:
 uv sync
 git add .
+git commit
 git push
 git tag 0.4.0
 git push --tags
